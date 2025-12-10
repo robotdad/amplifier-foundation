@@ -4,6 +4,13 @@ bundle:
   version: 1.0.0
   description: Foundation bundle - provider-agnostic base configuration
 
+includes:
+  - bundle: foundation/behaviors/logging
+  - bundle: foundation/behaviors/status-context
+  - bundle: foundation/behaviors/redaction
+  - bundle: foundation/behaviors/todo-reminder
+  - bundle: foundation/behaviors/streaming-ui
+
 session:
   orchestrator:
     module: loop-streaming
@@ -31,33 +38,6 @@ tools:
     source: git+https://github.com/microsoft/amplifier-module-tool-task@main
   - module: tool-todo
     source: git+https://github.com/microsoft/amplifier-module-tool-todo@main
-
-hooks:
-  - module: hooks-logging
-    source: git+https://github.com/microsoft/amplifier-module-hooks-logging@main
-    config:
-      mode: session-only
-      session_log_template: ~/.amplifier/projects/{project}/sessions/{session_id}/events.jsonl
-  - module: hooks-status-context
-    source: git+https://github.com/microsoft/amplifier-module-hooks-status-context@main
-    config:
-      include_datetime: true
-      datetime_include_timezone: false
-  - module: hooks-redaction
-    source: git+https://github.com/microsoft/amplifier-module-hooks-redaction@main
-    config:
-      allowlist:
-        - session_id
-        - turn_id
-        - span_id
-        - parent_span_id
-  - module: hooks-todo-reminder
-    source: git+https://github.com/microsoft/amplifier-module-hooks-todo-reminder@main
-    config:
-      inject_role: user
-      priority: 10
-  - module: hooks-streaming-ui
-    source: git+https://github.com/microsoft/amplifier-module-hooks-streaming-ui@main
 
 agents:
   include:
