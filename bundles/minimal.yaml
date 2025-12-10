@@ -1,0 +1,12 @@
+bundle:
+  name: foundation-minimal
+  version: 1.0.0
+  description: Minimal foundation bundle - basic tools only
+
+session:
+  orchestrator: loop-basic
+  context: context-simple
+
+tools:
+  - module: tool-filesystem
+    source: git+https://github.com/microsoft/amplifier-module-tool-filesystem@main

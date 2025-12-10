@@ -1,0 +1,11 @@
+bundle:
+  name: behavior-logging
+  version: 1.0.0
+  description: Logging behavior bundle
+
+hooks:
+  - module: hooks-logging
+    source: git+https://github.com/microsoft/amplifier-module-hooks-logging@main
+    config:
+      level: info
+      format: json
