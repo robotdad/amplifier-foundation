@@ -88,10 +88,17 @@ class TestConstructPaths:
         assert result == Path("/bundle/agents/code-reviewer.md")
 
     def test_construct_context_path(self) -> None:
-        """Constructs context path."""
+        """Constructs context path with any extension."""
         base = Path("/bundle")
-        result = construct_context_path(base, "philosophy")
+        # Context files include their extension (unlike agents which auto-append .md)
+        result = construct_context_path(base, "philosophy.md")
         assert result == Path("/bundle/context/philosophy.md")
+        # Works with any extension
+        result = construct_context_path(base, "config.yaml")
+        assert result == Path("/bundle/context/config.yaml")
+        # Works with nested paths
+        result = construct_context_path(base, "examples/snippet.py")
+        assert result == Path("/bundle/context/examples/snippet.py")
 
     def test_paths_are_standardized(self) -> None:
         """Paths use standard locations."""
