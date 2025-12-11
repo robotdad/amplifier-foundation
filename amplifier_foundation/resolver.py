@@ -90,6 +90,15 @@ class BundleResolver:
             # Load bundle from path
             bundle = await self._load_from_path(local_path)
 
+            # Register bundle name in discovery for namespace:path resolution
+            if bundle.name:
+                # Register with file:// URI pointing to the bundle's base path
+                if bundle.base_path:
+                    bundle_uri = f"file://{bundle.base_path.resolve()}"
+                else:
+                    bundle_uri = uri
+                self.discovery.register(bundle.name, bundle_uri)
+
             # Load includes and compose
             if auto_include and bundle.includes:
                 bundle = await self._compose_includes(bundle)
@@ -103,25 +112,72 @@ class BundleResolver:
         finally:
             self._loading.discard(uri)
 
-    def _resolve_source(self, source: str) -> str | None:
+    def _resolve_source(self, source: str, base_path: Path | None = None) -> str | None:
         """Resolve source to URI.
 
+        Resolution priority:
+        1. URIs: git+, http://, https://, file:// → Resolve directly
+        2. Local paths: Starting with ./, ../, ~/, / → Resolve as filesystem path
+        3. Bundle references: namespace:path → Look up namespace, resolve path within it
+        4. Plain names: foundation → Discovery lookup for bundle name
+
         Args:
-            source: Bundle name or URI.
+            source: Bundle name, URI, or namespace:path reference.
+            base_path: Base path for resolving relative paths within bundles.
 
         Returns:
             URI string, or None if not found.
         """
-        # Check if it's already a URI
+        # 1. Check if it's already a URI
         if "://" in source or source.startswith("git+"):
             return source
 
-        # Check if it's a local path
-        path = Path(source)
-        if path.exists():
-            return f"file://{path.resolve()}"
+        # 2. Check if it's an explicit local path (starts with ./, ../, ~/, /)
+        if source.startswith(("./", "../", "~/", "/")):
+            path = Path(source).expanduser()
+            if path.exists():
+                return f"file://{path.resolve()}"
+            return None
 
-        # Try discovery
+        # 3. Check for namespace:path syntax (bundle reference)
+        if ":" in source:
+            namespace, rel_path = source.split(":", 1)
+            # Look up namespace to find the base bundle
+            namespace_uri = self.discovery.find(namespace)
+            if namespace_uri:
+                # Resolve the path within the namespace's bundle directory
+                # Convert URI to path if it's a file:// URI
+                if namespace_uri.startswith("file://"):
+                    namespace_path = Path(namespace_uri[7:])
+                else:
+                    # For non-file URIs (e.g., git+), we need to resolve through source_resolver
+                    # For now, construct a combined reference that can be resolved later
+                    return f"{namespace_uri}#{rel_path}"
+
+                # Find the resource within the namespace bundle
+                if namespace_path.is_file():
+                    # If namespace points to a file, resolve relative to its parent
+                    resource_path = namespace_path.parent / rel_path
+                else:
+                    # If namespace points to a directory, resolve relative to it
+                    resource_path = namespace_path / rel_path
+
+                # Try common extensions if path doesn't exist directly
+                candidates = [
+                    resource_path,
+                    resource_path.with_suffix(".yaml"),
+                    resource_path.with_suffix(".yml"),
+                    resource_path.with_suffix(".md"),
+                    resource_path / "bundle.yaml",
+                    resource_path / "bundle.md",
+                ]
+                for candidate in candidates:
+                    if candidate.exists():
+                        return f"file://{candidate.resolve()}"
+
+            return None
+
+        # 4. Try discovery for plain names
         return self.discovery.find(source)
 
     async def _load_from_path(self, path: Path) -> Bundle:

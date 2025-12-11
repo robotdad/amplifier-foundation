@@ -5,11 +5,11 @@ bundle:
   description: Foundation bundle - provider-agnostic base configuration
 
 includes:
-  - bundle: foundation/behaviors/logging
-  - bundle: foundation/behaviors/status-context
-  - bundle: foundation/behaviors/redaction
-  - bundle: foundation/behaviors/todo-reminder
-  - bundle: foundation/behaviors/streaming-ui
+  - bundle: foundation:behaviors/logging
+  - bundle: foundation:behaviors/status-context
+  - bundle: foundation:behaviors/redaction
+  - bundle: foundation:behaviors/todo-reminder
+  - bundle: foundation:behaviors/streaming-ui
 
 session:
   orchestrator:
@@ -39,22 +39,22 @@ tools:
 
 agents:
   include:
-    - bug-hunter
-    - explorer
-    - integration-specialist
-    - modular-builder
-    - post-task-cleanup
-    - security-guardian
-    - test-coverage
-    - zen-architect
+    - foundation:bug-hunter
+    - foundation:explorer
+    - foundation:integration-specialist
+    - foundation:modular-builder
+    - foundation:post-task-cleanup
+    - foundation:security-guardian
+    - foundation:test-coverage
+    - foundation:zen-architect
 
 context:
   include:
-    - IMPLEMENTATION_PHILOSOPHY.md
-    - KERNEL_PHILOSOPHY.md
-    - MODULAR_DESIGN_PHILOSOPHY.md
-    - shared/common-agent-base.md
-    - shared/common-profile-base.md
+    - foundation:IMPLEMENTATION_PHILOSOPHY.md
+    - foundation:KERNEL_PHILOSOPHY.md
+    - foundation:MODULAR_DESIGN_PHILOSOPHY.md
+    - foundation:shared/common-agent-base.md
+    - foundation:shared/common-profile-base.md
 ---
 
 # Core Instructions

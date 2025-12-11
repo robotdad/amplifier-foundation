@@ -5,4 +5,4 @@ bundle:
 
 includes:
   - bundle: foundation
-  - bundle: foundation/providers/anthropic-opus
+  - bundle: foundation:providers/anthropic-opus
