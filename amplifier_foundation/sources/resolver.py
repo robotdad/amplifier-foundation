@@ -9,7 +9,9 @@ from amplifier_foundation.paths.resolution import parse_uri
 
 from .file import FileSourceHandler
 from .git import GitSourceHandler
+from .http import HttpSourceHandler
 from .protocol import SourceHandlerProtocol
+from .zip import ZipSourceHandler
 
 
 class SimpleSourceResolver:
@@ -18,6 +20,8 @@ class SimpleSourceResolver:
     Supports:
     - file:// and local paths via FileSourceHandler
     - git+https:// via GitSourceHandler
+    - https:// and http:// via HttpSourceHandler
+    - zip+https:// and zip+file:// via ZipSourceHandler
 
     Apps can extend by adding custom handlers.
     """
@@ -36,10 +40,12 @@ class SimpleSourceResolver:
         self.cache_dir = cache_dir or Path.home() / ".cache" / "amplifier" / "bundles"
         self.base_path = base_path or Path.cwd()
 
-        # Default handlers
+        # Default handlers - order matters for URI matching
         self._handlers: list[SourceHandlerProtocol] = [
             FileSourceHandler(base_path=self.base_path),
             GitSourceHandler(),
+            ZipSourceHandler(),  # Must be before HttpSourceHandler (zip+https matches before https)
+            HttpSourceHandler(),
         ]
 
     def add_handler(self, handler: SourceHandlerProtocol) -> None:

@@ -139,6 +139,69 @@ class Bundle:
 
         return mount_plan
 
+    async def prepare(self, install_deps: bool = True) -> PreparedBundle:
+        """Prepare bundle for execution by activating all modules.
+
+        Downloads and installs all modules specified in the bundle's mount plan,
+        making them importable. Returns a PreparedBundle containing the mount plan
+        and a module resolver for use with AmplifierSession.
+
+        This is the turn-key method for apps that want to load a bundle and
+        execute it without managing module resolution themselves.
+
+        Args:
+            install_deps: Whether to install Python dependencies for modules.
+
+        Returns:
+            PreparedBundle with mount_plan and create_session() helper.
+
+        Example:
+            bundle = await load_bundle("git+https://...")
+            prepared = await bundle.prepare()
+            async with prepared.create_session() as session:
+                response = await session.execute("Hello!")
+
+            # Or manually:
+            session = AmplifierSession(config=prepared.mount_plan)
+            await session.coordinator.mount("module-source-resolver", prepared.resolver)
+            await session.initialize()
+        """
+        from amplifier_foundation.modules.activator import ModuleActivator
+
+        # Get mount plan
+        mount_plan = self.to_mount_plan()
+
+        # Create activator
+        activator = ModuleActivator(install_deps=install_deps)
+
+        # Collect all modules that need activation
+        modules_to_activate = []
+
+        # Session orchestrator and context
+        session_config = mount_plan.get("session", {})
+        if isinstance(session_config.get("orchestrator"), dict):
+            orch = session_config["orchestrator"]
+            if "source" in orch:
+                modules_to_activate.append(orch)
+        if isinstance(session_config.get("context"), dict):
+            ctx = session_config["context"]
+            if "source" in ctx:
+                modules_to_activate.append(ctx)
+
+        # Providers, tools, hooks
+        for section in ["providers", "tools", "hooks"]:
+            for mod_spec in mount_plan.get(section, []):
+                if isinstance(mod_spec, dict) and "source" in mod_spec:
+                    modules_to_activate.append(mod_spec)
+
+        # Activate all modules and get their paths
+        module_paths = await activator.activate_all(modules_to_activate)
+
+        # Create resolver from activated paths
+        resolver = BundleModuleResolver(module_paths)
+
+        return PreparedBundle(mount_plan=mount_plan, resolver=resolver)
+
     def resolve_context_path(self, name: str) -> Path | None:
         """Resolve context file by name.
 
@@ -275,3 +338,119 @@ def _parse_context(context_config: dict[str, Any], base_path: Path | None) -> di
                 result[key] = Path(value)
 
     return result
+
+
+class BundleModuleSource:
+    """Simple module source that returns a pre-resolved path."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    def resolve(self) -> Path:
+        """Return the pre-resolved module path."""
+        return self._path
+
+
+class BundleModuleResolver:
+    """Module resolver for prepared bundles.
+
+    Maps module IDs to their activated paths. Implements the kernel's
+    ModuleSourceResolver protocol.
+    """
+
+    def __init__(self, module_paths: dict[str, Path]) -> None:
+        """Initialize with activated module paths.
+
+        Args:
+            module_paths: Dict mapping module ID to local path.
+        """
+        self._paths = module_paths
+
+    def resolve(self, module_id: str, profile_hint: Any = None) -> BundleModuleSource:
+        """Resolve module ID to source.
+
+        Args:
+            module_id: Module identifier (e.g., "tool-bash").
+            profile_hint: Optional hint (unused, for protocol compliance).
+
+        Returns:
+            BundleModuleSource with the module path.
+
+        Raises:
+            ModuleNotFoundError: If module not in activated paths.
+        """
+        if module_id not in self._paths:
+            raise ModuleNotFoundError(
+                f"Module '{module_id}' not found in prepared bundle. Available modules: {list(self._paths.keys())}"
+            )
+        return BundleModuleSource(self._paths[module_id])
+
+    def get_module_source(self, module_id: str) -> str | None:
+        """Get module source path as string.
+
+        This method provides compatibility with StandardModuleSourceResolver's
+        get_module_source() interface used by some app layers.
+
+        Args:
+            module_id: Module identifier.
+
+        Returns:
+            String path to module, or None if not found.
+        """
+        path = self._paths.get(module_id)
+        return str(path) if path else None
+
+
+@dataclass
+class PreparedBundle:
+    """A bundle that has been prepared for execution.
+
+    Contains the mount plan and a module resolver that can be used
+    with AmplifierSession.
+    """
+
+    mount_plan: dict[str, Any]
+    resolver: BundleModuleResolver
+
+    async def create_session(
+        self,
+        session_id: str | None = None,
+        approval_system: Any = None,
+        display_system: Any = None,
+    ) -> Any:
+        """Create an AmplifierSession with the resolver properly mounted.
+
+        This is a convenience method that handles the full setup:
+        1. Creates AmplifierSession with mount plan
+        2. Mounts the module resolver
+        3. Initializes the session
+
+        Args:
+            session_id: Optional session ID.
+            approval_system: Optional approval system for hooks.
+            display_system: Optional display system for hooks.
+
+        Returns:
+            Initialized AmplifierSession ready for execute().
+
+        Example:
+            prepared = await bundle.prepare()
+            async with prepared.create_session() as session:
+                response = await session.execute("Hello!")
+        """
+        from amplifier_core import AmplifierSession
+
+        session = AmplifierSession(
+            self.mount_plan,
+            session_id=session_id,
+            approval_system=approval_system,
+            display_system=display_system,
+        )
+
+        # Mount the resolver before initialization
+        await session.coordinator.mount("module-source-resolver", self.resolver)
+
+        # Initialize the session (loads all modules)
+        await session.initialize()
+
+        return session

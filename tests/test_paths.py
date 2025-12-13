@@ -20,13 +20,45 @@ class TestParseUri:
         assert result.ref == "main"
 
     def test_git_uri_with_subpath(self) -> None:
-        """Parses git URI with subpath."""
+        """Parses git URI with legacy subpath (still supported)."""
         result = parse_uri("git+https://github.com/user/repo@main/path/to/bundle")
         assert result.scheme == "git+https"
         assert result.host == "github.com"
         assert result.path == "/user/repo"
         assert result.ref == "main"
         assert result.subpath == "path/to/bundle"
+
+    def test_git_uri_with_subdirectory_fragment(self) -> None:
+        """Parses git URI with pip/uv standard #subdirectory= fragment."""
+        result = parse_uri("git+https://github.com/org/repo@main#subdirectory=bundles/foundation")
+        assert result.scheme == "git+https"
+        assert result.host == "github.com"
+        assert result.path == "/org/repo"
+        assert result.ref == "main"
+        assert result.subpath == "bundles/foundation"
+
+    def test_git_uri_fragment_takes_precedence(self) -> None:
+        """Fragment #subdirectory= takes precedence over legacy /subpath."""
+        result = parse_uri("git+https://github.com/org/repo@v1.0.0/old/path#subdirectory=new/path")
+        assert result.ref == "v1.0.0"
+        assert result.subpath == "new/path"  # Fragment wins
+
+    def test_zip_https_uri(self) -> None:
+        """Parses zip+https:// URIs."""
+        result = parse_uri("zip+https://releases.example.com/bundle.zip#subdirectory=foundation")
+        assert result.scheme == "zip+https"
+        assert result.host == "releases.example.com"
+        assert result.path == "/bundle.zip"
+        assert result.subpath == "foundation"
+        assert result.is_zip
+
+    def test_zip_file_uri(self) -> None:
+        """Parses zip+file:// URIs."""
+        result = parse_uri("zip+file:///local/archive.zip#subdirectory=my-bundle")
+        assert result.scheme == "zip+file"
+        assert result.path == "/local/archive.zip"
+        assert result.subpath == "my-bundle"
+        assert result.is_zip
 
     def test_file_uri(self) -> None:
         """Parses file:// URIs."""

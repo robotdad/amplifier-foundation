@@ -20,10 +20,11 @@ from __future__ import annotations
 # Core classes
 from amplifier_foundation.bundle import Bundle
 
+# Reference implementations
+from amplifier_foundation.cache.disk import DiskCache
+
 # Protocols
 from amplifier_foundation.cache.protocol import CacheProviderProtocol
-
-# Reference implementations
 from amplifier_foundation.cache.simple import SimpleCache
 
 # Dict utilities
@@ -101,6 +102,7 @@ __all__ = [
     "SimpleSourceResolver",
     "SimpleBundleDiscovery",
     "SimpleCache",
+    "DiskCache",
     # Mentions
     "parse_mentions",
     "load_mentions",

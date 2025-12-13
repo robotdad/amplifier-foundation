@@ -12,11 +12,11 @@ from urllib.parse import urlparse
 class ParsedURI:
     """Parsed URI components."""
 
-    scheme: str  # git, file, http, https, or empty for package names
+    scheme: str  # git, file, http, https, zip, or empty for package names
     host: str  # github.com, etc.
     path: str  # /org/repo or local path
     ref: str  # @main, @v1.0.0, etc. (empty if not specified)
-    subpath: str  # /path/within/repo (empty if not specified)
+    subpath: str  # path inside container (from @ref/subpath OR #subdirectory=)
 
     @property
     def is_git(self) -> bool:
@@ -34,6 +34,11 @@ class ParsedURI:
         return self.scheme in ("http", "https")
 
     @property
+    def is_zip(self) -> bool:
+        """True if this is a zip URI (zip+https://, zip+file://)."""
+        return self.scheme.startswith("zip+")
+
+    @property
     def is_package(self) -> bool:
         """True if this looks like a package/bundle name."""
         return self.scheme == "" and "/" not in self.path
@@ -42,8 +47,11 @@ class ParsedURI:
 def parse_uri(uri: str) -> ParsedURI:
     """Parse a URI into components.
 
-    Supports:
-    - git+https://github.com/org/repo@ref/subpath
+    Supports pip/uv standard syntax with #subdirectory= fragment:
+    - git+https://github.com/org/repo@ref#subdirectory=path/inside
+    - git+https://github.com/org/repo@ref/subpath (legacy, still supported)
+    - zip+https://example.com/bundle.zip#subdirectory=path/inside
+    - zip+file:///local/archive.zip#subdirectory=path/inside
     - file:///path/to/file
     - /absolute/path
     - ./relative/path
@@ -56,14 +64,18 @@ def parse_uri(uri: str) -> ParsedURI:
     Returns:
         ParsedURI with extracted components.
     """
-    # Handle git+ prefix
+    # Handle git+ prefix (pip/uv standard)
     if uri.startswith("git+"):
-        return _parse_git_uri(uri[4:])
+        return _parse_vcs_uri(uri, prefix="git+")
+
+    # Handle zip+ prefix (extended pattern for archives)
+    if uri.startswith("zip+"):
+        return _parse_vcs_uri(uri, prefix="zip+")
 
     # Handle explicit file:// scheme
     if uri.startswith("file://"):
-        path = uri[7:]
-        return ParsedURI(scheme="file", host="", path=path, ref="", subpath="")
+        path, subpath = _extract_fragment_subpath(uri[7:])
+        return ParsedURI(scheme="file", host="", path=path, ref="", subpath=subpath)
 
     # Handle absolute paths
     if uri.startswith("/"):
@@ -76,12 +88,13 @@ def parse_uri(uri: str) -> ParsedURI:
     # Handle http/https URLs
     if uri.startswith("http://") or uri.startswith("https://"):
         parsed = urlparse(uri)
+        subpath = _extract_subdirectory_from_fragment(parsed.fragment)
         return ParsedURI(
             scheme=parsed.scheme,
             host=parsed.netloc,
             path=parsed.path,
             ref="",
-            subpath="",
+            subpath=subpath,
         )
 
     # Assume package name or package/subpath
@@ -99,26 +112,87 @@ def parse_uri(uri: str) -> ParsedURI:
     return ParsedURI(scheme="", host="", path=uri, ref="", subpath="")
 
 
-def _parse_git_uri(uri: str) -> ParsedURI:
-    """Parse a git URI (without git+ prefix)."""
-    parsed = urlparse(uri)
+def _extract_subdirectory_from_fragment(fragment: str) -> str:
+    """Extract subdirectory= value from URL fragment.
 
-    # Extract ref and subpath from path
+    Follows pip/uv standard: #subdirectory=path/inside
+
+    Args:
+        fragment: URL fragment string (without leading #).
+
+    Returns:
+        Subdirectory path, or empty string if not specified.
+    """
+    if not fragment:
+        return ""
+
+    # Parse fragment as query string (handles subdirectory=value)
+    # Fragment format: subdirectory=path/inside or subdirectory=path/inside&other=val
+    for part in fragment.split("&"):
+        if part.startswith("subdirectory="):
+            return part[len("subdirectory=") :]
+
+    return ""
+
+
+def _extract_fragment_subpath(uri_with_possible_fragment: str) -> tuple[str, str]:
+    """Split a URI into path and subdirectory from fragment.
+
+    Args:
+        uri_with_possible_fragment: URI that may contain #subdirectory=.
+
+    Returns:
+        Tuple of (path, subpath).
+    """
+    if "#" in uri_with_possible_fragment:
+        path, fragment = uri_with_possible_fragment.split("#", 1)
+        subpath = _extract_subdirectory_from_fragment(fragment)
+        return path, subpath
+    return uri_with_possible_fragment, ""
+
+
+def _parse_vcs_uri(uri: str, prefix: str) -> ParsedURI:
+    """Parse a VCS URI (git+ or zip+ prefix).
+
+    Supports both pip/uv standard #subdirectory= and legacy @ref/subpath syntax.
+
+    Args:
+        uri: Full URI including prefix.
+        prefix: The prefix to strip (e.g., "git+", "zip+").
+
+    Returns:
+        ParsedURI with extracted components.
+    """
+    # Strip prefix for parsing
+    uri_without_prefix = uri[len(prefix) :]
+
+    # First extract any fragment (#subdirectory=)
+    fragment_subpath = ""
+    if "#" in uri_without_prefix:
+        uri_without_prefix, fragment = uri_without_prefix.split("#", 1)
+        fragment_subpath = _extract_subdirectory_from_fragment(fragment)
+
+    parsed = urlparse(uri_without_prefix)
+
+    # Extract ref and legacy subpath from path
     path = parsed.path
     ref = ""
-    subpath = ""
+    legacy_subpath = ""
 
-    # Check for @ref syntax
+    # Check for @ref syntax (e.g., /org/repo@main or /org/repo@main/subpath)
     if "@" in path:
-        # Split on @ but be careful about paths that might have @ in them
         match = re.match(r"^([^@]+)@([^/]+)(.*)$", path)
         if match:
             path = match.group(1)
             ref = match.group(2)
-            subpath = match.group(3).lstrip("/")
+            legacy_subpath = match.group(3).lstrip("/")
+
+    # Fragment #subdirectory= takes precedence over legacy /subpath
+    # This allows explicit override and cleaner URIs
+    subpath = fragment_subpath if fragment_subpath else legacy_subpath
 
     return ParsedURI(
-        scheme="git+" + parsed.scheme,
+        scheme=prefix + parsed.scheme,
         host=parsed.netloc,
         path=path,
         ref=ref,

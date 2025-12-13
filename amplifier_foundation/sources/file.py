@@ -46,6 +46,10 @@ class FileSourceHandler:
 
         path = path.resolve()
 
+        # Apply subpath if specified (from #subdirectory= fragment)
+        if parsed.subpath:
+            path = path / parsed.subpath
+
         if not path.exists():
             raise BundleNotFoundError(f"File not found: {path}")
 
