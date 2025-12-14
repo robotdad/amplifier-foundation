@@ -150,23 +150,22 @@ When loading by name, resolution follows this order:
 ### Customizing Resolution
 
 ```python
-from amplifier_foundation import BundleResolver, SimpleSourceResolver, SimpleBundleDiscovery
+from amplifier_foundation import BundleRegistry, SimpleSourceResolver
+from pathlib import Path
 
-# Create discovery and register known bundles
-discovery = SimpleBundleDiscovery()
-discovery.register("foundation", "git+https://github.com/microsoft/amplifier-foundation@main")
-discovery.register("my-bundle", "file:///path/to/my-bundle")
-
-# Create resolver with custom cache directory
-resolver = BundleResolver(
+# Create registry with custom cache directory
+registry = BundleRegistry(
     source_resolver=SimpleSourceResolver(
         cache_dir=Path("~/.my-app/cache").expanduser(),
         base_path=Path.cwd()
-    ),
-    discovery=discovery
+    )
 )
 
-bundle = await resolver.load("my-bundle")
+# Register known bundles
+registry.register("foundation", "git+https://github.com/microsoft/amplifier-foundation@main")
+registry.register("my-bundle", "file:///path/to/my-bundle")
+
+bundle = await registry.load("my-bundle")
 ```
 
 ## Composition
@@ -298,24 +297,26 @@ context_path = bundle.resolve_context_path("PHILOSOPHY.md")
 instruction = bundle.get_system_instruction()
 ```
 
-#### BundleResolver
+#### BundleRegistry
 
-Loads and resolves bundles from various sources.
+Unified class for bundle discovery, registration, and loading.
 
 ```python
-from amplifier_foundation import BundleResolver
+from amplifier_foundation import BundleRegistry
 
-resolver = BundleResolver(
+registry = BundleRegistry(
     source_resolver=...,  # Optional: custom source resolution
-    discovery=...,        # Optional: custom bundle discovery
     cache=...,            # Optional: custom caching
 )
 
+# Register known bundles
+registry.register("my-bundle", "git+https://github.com/org/repo@main")
+
 # Load with automatic include resolution
-bundle = await resolver.load("my-bundle", auto_include=True)
+bundle = await registry.load("my-bundle", auto_include=True)
 
 # Load without resolving includes
-bundle = await resolver.load("my-bundle", auto_include=False)
+bundle = await registry.load("my-bundle", auto_include=False)
 ```
 
 #### load_bundle
@@ -336,7 +337,6 @@ Foundation provides protocols for customization:
 |----------|---------|----------------------|
 | `SourceResolverProtocol` | URI to local path | `SimpleSourceResolver` |
 | `SourceHandlerProtocol` | Handle specific URI types | Git, HTTP, Zip, File handlers |
-| `BundleDiscoveryProtocol` | Name to URI lookup | `SimpleBundleDiscovery` |
 | `CacheProviderProtocol` | Bundle caching | `SimpleCache`, `DiskCache` |
 | `MentionResolverProtocol` | @mention resolution | `BaseMentionResolver` |
 

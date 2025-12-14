@@ -1,9 +1,3 @@
-"""Bundle discovery protocols and implementations."""
+"""Bundle discovery - reserved for future discovery extensions."""
 
-from .protocol import BundleDiscoveryProtocol
-from .simple import SimpleBundleDiscovery
-
-__all__ = [
-    "BundleDiscoveryProtocol",
-    "SimpleBundleDiscovery",
-]
+__all__: list[str] = []

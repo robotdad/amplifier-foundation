@@ -200,7 +200,7 @@ class Bundle:
         # Create resolver from activated paths
         resolver = BundleModuleResolver(module_paths)
 
-        return PreparedBundle(mount_plan=mount_plan, resolver=resolver)
+        return PreparedBundle(mount_plan=mount_plan, resolver=resolver, bundle=self)
 
     def resolve_context_path(self, name: str) -> Path | None:
         """Resolve context file by name.
@@ -405,16 +405,18 @@ class BundleModuleResolver:
 class PreparedBundle:
     """A bundle that has been prepared for execution.
 
-    Contains the mount plan and a module resolver that can be used
-    with AmplifierSession.
+    Contains the mount plan, module resolver, and original bundle for
+    spawning support.
     """
 
     mount_plan: dict[str, Any]
     resolver: BundleModuleResolver
+    bundle: Bundle
 
     async def create_session(
         self,
         session_id: str | None = None,
+        parent_id: str | None = None,
         approval_system: Any = None,
         display_system: Any = None,
     ) -> Any:
@@ -425,8 +427,14 @@ class PreparedBundle:
         2. Mounts the module resolver
         3. Initializes the session
 
+        Note: Session spawning capability registration is APP-LAYER policy.
+        Apps should register their own spawn capability that adapts the
+        task tool's contract to foundation's spawn mechanism. See the
+        end_to_end example for a reference implementation.
+
         Args:
-            session_id: Optional session ID.
+            session_id: Optional session ID (for resuming existing session).
+            parent_id: Optional parent session ID (for lineage tracking).
             approval_system: Optional approval system for hooks.
             display_system: Optional display system for hooks.
 
@@ -443,6 +451,7 @@ class PreparedBundle:
         session = AmplifierSession(
             self.mount_plan,
             session_id=session_id,
+            parent_id=parent_id,
             approval_system=approval_system,
             display_system=display_system,
         )
@@ -454,3 +463,97 @@ class PreparedBundle:
         await session.initialize()
 
         return session
+
+    async def spawn(
+        self,
+        child_bundle: Bundle,
+        instruction: str,
+        *,
+        compose: bool = True,
+        parent_session: Any = None,
+        session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Spawn a sub-session with a child bundle.
+
+        This is the core spawning MECHANISM. It handles:
+        1. Optionally composes child with parent bundle
+        2. Creates a new session with the child's mount plan
+        3. Injects system instruction if present
+        4. Executes the instruction
+        5. Returns the result
+
+        Agent name resolution is APP-LAYER POLICY. Apps should resolve
+        agent names to Bundle objects before calling this method.
+        See the end_to_end example for a reference implementation.
+
+        Args:
+            child_bundle: Bundle to spawn (already resolved by app layer).
+            instruction: Task instruction for the sub-session.
+            compose: Whether to compose child with parent bundle (default True).
+            parent_session: Parent session for lineage tracking and UX inheritance.
+            session_id: Optional session ID for resuming existing session.
+
+        Returns:
+            Dict with "output" (response) and "session_id".
+
+        Example:
+            # App layer resolves agent name to Bundle, then calls spawn
+            child_bundle = resolve_agent_bundle("bug-hunter", agent_configs)
+            result = await prepared.spawn(
+                child_bundle,
+                "Find the bug in auth.py",
+            )
+
+            # Resume existing session
+            result = await prepared.spawn(
+                child_bundle,
+                "Continue investigating",
+                session_id=previous_result["session_id"],
+            )
+
+            # Spawn without composition (standalone bundle)
+            result = await prepared.spawn(
+                complete_bundle,
+                "Do something",
+                compose=False,
+            )
+        """
+        # Compose with parent if requested
+        effective_bundle = child_bundle
+        if compose:
+            effective_bundle = self.bundle.compose(child_bundle)
+
+        # Get mount plan and create session
+        child_mount_plan = effective_bundle.to_mount_plan()
+
+        from amplifier_core import AmplifierSession
+
+        child_session = AmplifierSession(
+            child_mount_plan,
+            session_id=session_id,
+            parent_id=parent_session.session_id if parent_session else None,
+            approval_system=getattr(getattr(parent_session, "coordinator", None), "approval_system", None)
+            if parent_session
+            else None,
+            display_system=getattr(getattr(parent_session, "coordinator", None), "display_system", None)
+            if parent_session
+            else None,
+        )
+
+        # Mount resolver and initialize
+        await child_session.coordinator.mount("module-source-resolver", self.resolver)
+        await child_session.initialize()
+
+        # Inject system instruction if present
+        if effective_bundle.instruction:
+            context = child_session.coordinator.get("context")
+            if context and hasattr(context, "add_message"):
+                await context.add_message({"role": "system", "content": effective_bundle.instruction})
+
+        # Execute instruction and cleanup
+        try:
+            response = await child_session.execute(instruction)
+        finally:
+            await child_session.cleanup()
+
+        return {"output": response, "session_id": child_session.session_id}

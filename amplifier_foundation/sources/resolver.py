@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from amplifier_foundation.exceptions import BundleNotFoundError
+from amplifier_foundation.paths.resolution import get_amplifier_home
 from amplifier_foundation.paths.resolution import parse_uri
 
 from .file import FileSourceHandler
@@ -37,7 +38,7 @@ class SimpleSourceResolver:
             cache_dir: Directory for caching remote content.
             base_path: Base path for resolving relative paths.
         """
-        self.cache_dir = cache_dir or Path.home() / ".cache" / "amplifier" / "bundles"
+        self.cache_dir = cache_dir or get_amplifier_home() / "cache" / "bundles"
         self.base_path = base_path or Path.cwd()
 
         # Default handlers - order matters for URI matching

@@ -9,18 +9,38 @@ This interactive example demonstrates the complete workflow:
 5. Let user enter a prompt
 6. Execute via AmplifierSession and display response
 
+Features demonstrated:
+- Bundle loading and composition
+- Provider selection
+- Session execution
+- Sub-session spawning (via session.spawn capability)
+
+Sub-session spawning architecture:
+- Foundation provides MECHANISM: PreparedBundle.spawn(child_bundle, instruction)
+- App provides POLICY: spawn_capability that adapts task tool's contract
+- Task tool calls: spawn_fn(agent_name, instruction, parent_session, agent_configs, sub_session_id)
+- App resolves agent_name -> Bundle, then calls foundation's spawn
+
 Requirements:
 - API key environment variable set for chosen provider:
   - Anthropic: ANTHROPIC_API_KEY
   - OpenAI: OPENAI_API_KEY
 """
 
+from __future__ import annotations
+
 import asyncio
 import os
 from pathlib import Path
+from typing import Any
 
 from amplifier_foundation import Bundle
 from amplifier_foundation import load_bundle
+from amplifier_foundation.bundle import PreparedBundle
+
+# =============================================================================
+# Provider Discovery and Selection
+# =============================================================================
 
 
 def discover_providers(foundation_path: Path) -> list[dict]:
@@ -114,6 +134,121 @@ def get_user_prompt() -> str | None:
     if prompt.lower() == "q":
         return None
     return prompt
+
+
+# =============================================================================
+# App-Layer Spawn Policy (adapts task tool contract to foundation mechanism)
+# =============================================================================
+
+
+def register_spawn_capability(
+    session: Any,
+    prepared: PreparedBundle,
+) -> None:
+    """Register spawn capability with task tool's expected contract.
+
+    This is APP-LAYER POLICY that wraps foundation's mechanism.
+    Different apps can implement different agent resolution strategies.
+
+    The task tool expects this contract:
+        spawn_fn(agent_name, instruction, parent_session, agent_configs, sub_session_id)
+
+    Foundation provides this mechanism:
+        prepared.spawn(child_bundle, instruction, session_id, parent_session)
+
+    This function bridges the gap by resolving agent_name -> Bundle.
+    """
+
+    async def spawn_capability(
+        agent_name: str,
+        instruction: str,
+        parent_session: Any,
+        agent_configs: dict[str, dict[str, Any]],
+        sub_session_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Spawn a sub-session for agent delegation.
+
+        Args:
+            agent_name: Name of agent (e.g., "zen-architect")
+            instruction: Task for the agent to execute
+            parent_session: Parent session for inheritance
+            agent_configs: Registry of available agent configurations
+            sub_session_id: Optional session ID for resumption
+
+        Returns:
+            {"output": str, "session_id": str}
+        """
+        # POLICY: Resolve agent name to Bundle
+        child_bundle = resolve_agent_bundle(
+            agent_name,
+            agent_configs,
+            prepared.bundle,
+        )
+
+        # MECHANISM: Call foundation's spawn
+        return await prepared.spawn(
+            child_bundle=child_bundle,
+            instruction=instruction,
+            session_id=sub_session_id,
+            parent_session=parent_session,
+        )
+
+    session.coordinator.register_capability("session.spawn", spawn_capability)
+
+
+def resolve_agent_bundle(
+    agent_name: str,
+    agent_configs: dict[str, dict[str, Any]],
+    parent_bundle: Bundle,
+) -> Bundle:
+    """Resolve agent name to a Bundle. APP-LAYER POLICY.
+
+    Resolution order:
+    1. agent_configs registry (passed by task tool from mount plan)
+    2. Parent bundle's inline agents
+
+    Apps can customize this resolution strategy.
+
+    Args:
+        agent_name: Name of the agent to resolve
+        agent_configs: Registry from session config (mount plan "agents" section)
+        parent_bundle: The parent bundle for fallback resolution
+
+    Returns:
+        Resolved Bundle
+
+    Raises:
+        ValueError: If agent not found
+    """
+    # 1. Check agent_configs registry first (task tool passes this from mount plan)
+    if agent_name in agent_configs:
+        config = agent_configs[agent_name]
+        return Bundle(
+            name=agent_name,
+            version="1.0.0",
+            session=config.get("session", {}),
+            providers=config.get("providers", []),
+            tools=config.get("tools", []),
+            hooks=config.get("hooks", []),
+            instruction=config.get("system", {}).get("instruction"),
+        )
+
+    # 2. Check parent bundle's inline agents
+    if agent_name in parent_bundle.agents:
+        config = parent_bundle.agents[agent_name]
+        return Bundle(
+            name=agent_name,
+            version="1.0.0",
+            session=config.get("session", {}),
+            providers=config.get("providers", []),
+            tools=config.get("tools", []),
+            hooks=config.get("hooks", []),
+            instruction=config.get("instruction"),
+        )
+
+    # Not found
+    available = list(agent_configs.keys()) + list(parent_bundle.agents.keys())
+    raise ValueError(f"Agent '{agent_name}' not found. Available: {available or 'none'}")
 
 
 async def main() -> None:
@@ -246,8 +381,21 @@ async def main() -> None:
     print("-" * 60)
 
     try:
-        # Use PreparedBundle.create_session() which properly mounts the resolver
+        # PreparedBundle.create_session() handles:
+        # - Creates session with mount plan
+        # - Mounts module resolver
+        # - Initializes session
+        #
+        # App layer registers spawn capability (adapts task tool contract):
+        # - Task tool calls: spawn_fn(agent_name, instruction, parent_session, agent_configs, sub_session_id)
+        # - App resolves agent_name -> Bundle
+        # - App calls: prepared.spawn(child_bundle, instruction, session_id, parent_session)
         session = await prepared.create_session()
+
+        # Register app-layer spawn capability (adapts task tool's contract)
+        register_spawn_capability(session, prepared)
+        print("      Sub-session spawning enabled (session.spawn capability registered)")
+
         async with session:
             response = await session.execute(prompt)
             print(f"\nResponse:\n{response}")

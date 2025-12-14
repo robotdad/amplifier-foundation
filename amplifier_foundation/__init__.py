@@ -32,8 +32,6 @@ from amplifier_foundation.dicts.merge import deep_merge
 from amplifier_foundation.dicts.merge import merge_module_lists
 from amplifier_foundation.dicts.navigation import get_nested
 from amplifier_foundation.dicts.navigation import set_nested
-from amplifier_foundation.discovery.protocol import BundleDiscoveryProtocol
-from amplifier_foundation.discovery.simple import SimpleBundleDiscovery
 
 # Exceptions
 from amplifier_foundation.exceptions import BundleDependencyError
@@ -66,8 +64,10 @@ from amplifier_foundation.paths.discovery import find_files
 from amplifier_foundation.paths.resolution import ParsedURI
 from amplifier_foundation.paths.resolution import normalize_path
 from amplifier_foundation.paths.resolution import parse_uri
-from amplifier_foundation.resolver import BundleResolver
-from amplifier_foundation.resolver import load_bundle
+from amplifier_foundation.registry import BundleRegistry
+from amplifier_foundation.registry import BundleState
+from amplifier_foundation.registry import UpdateInfo
+from amplifier_foundation.registry import load_bundle
 from amplifier_foundation.sources.protocol import SourceHandlerProtocol
 from amplifier_foundation.sources.protocol import SourceResolverProtocol
 from amplifier_foundation.sources.resolver import SimpleSourceResolver
@@ -79,7 +79,9 @@ from amplifier_foundation.validator import validate_bundle_or_raise
 __all__ = [
     # Core
     "Bundle",
-    "BundleResolver",
+    "BundleRegistry",
+    "BundleState",
+    "UpdateInfo",
     "BundleValidator",
     "ValidationResult",
     "load_bundle",
@@ -95,12 +97,10 @@ __all__ = [
     "MentionResolverProtocol",
     "SourceResolverProtocol",
     "SourceHandlerProtocol",
-    "BundleDiscoveryProtocol",
     "CacheProviderProtocol",
     # Reference implementations
     "BaseMentionResolver",
     "SimpleSourceResolver",
-    "SimpleBundleDiscovery",
     "SimpleCache",
     "DiskCache",
     # Mentions

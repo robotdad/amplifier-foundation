@@ -14,6 +14,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from amplifier_foundation.paths.resolution import get_amplifier_home
 from amplifier_foundation.sources.resolver import SimpleSourceResolver
 
 
@@ -40,7 +41,7 @@ class ModuleActivator:
             cache_dir: Directory for caching downloaded modules.
             install_deps: Whether to install Python dependencies.
         """
-        self.cache_dir = cache_dir or Path.home() / ".cache" / "amplifier" / "modules"
+        self.cache_dir = cache_dir or get_amplifier_home() / "modules"
         self.install_deps = install_deps
         self._resolver = SimpleSourceResolver(cache_dir=self.cache_dir)
         self._activated: set[str] = set()
