@@ -34,10 +34,12 @@ asyncio.run(main())
 
 | Document | Description |
 |----------|-------------|
-| [CONCEPTS.md](docs/CONCEPTS.md) | What bundles are, composition rules, the foundation bundle |
-| [BUNDLE_FORMAT.md](docs/BUNDLE_FORMAT.md) | Bundle file formats (YAML, Markdown) and directory structure |
-| [URI_FORMATS.md](docs/URI_FORMATS.md) | Supported URI patterns for loading bundles |
-| [API_REFERENCE.md](docs/API_REFERENCE.md) | Complete API reference for all classes and functions |
+| [CONCEPTS.md](docs/CONCEPTS.md) | Mental model: bundles, composition, mount plans |
+| [PATTERNS.md](docs/PATTERNS.md) | Common patterns with code examples |
+| [URI_FORMATS.md](docs/URI_FORMATS.md) | Source URI quick reference |
+| [API_REFERENCE.md](docs/API_REFERENCE.md) | API index pointing to source files |
+
+**Code is the authoritative reference**: Each source file has comprehensive docstrings. Read `bundle.py`, `validator.py`, etc. directly or use `help(ClassName)`.
 
 ## Philosophy
 
