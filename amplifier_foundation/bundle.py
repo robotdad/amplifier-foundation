@@ -203,8 +203,9 @@ class Bundle:
         # Get mount plan
         mount_plan = self.to_mount_plan()
 
-        # Create activator
-        activator = ModuleActivator(install_deps=install_deps)
+        # Create activator with bundle's base_path so relative module paths
+        # like ./modules/foo resolve relative to the bundle, not cwd
+        activator = ModuleActivator(install_deps=install_deps, base_path=self.base_path)
 
         # Collect all modules that need activation
         modules_to_activate = []

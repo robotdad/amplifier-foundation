@@ -37,16 +37,21 @@ class ModuleActivator:
         self,
         cache_dir: Path | None = None,
         install_deps: bool = True,
+        base_path: Path | None = None,
     ) -> None:
         """Initialize module activator.
 
         Args:
             cache_dir: Directory for caching downloaded modules.
             install_deps: Whether to install Python dependencies.
+            base_path: Base path for resolving relative module paths.
+                       For bundles loaded from git, this should be the cloned
+                       bundle's base_path so relative paths like ./modules/foo
+                       resolve correctly.
         """
         self.cache_dir = cache_dir or get_amplifier_home() / "modules"
         self.install_deps = install_deps
-        self._resolver = SimpleSourceResolver(cache_dir=self.cache_dir)
+        self._resolver = SimpleSourceResolver(cache_dir=self.cache_dir, base_path=base_path)
         self._activated: set[str] = set()
 
     async def activate(self, module_name: str, source_uri: str) -> Path:
