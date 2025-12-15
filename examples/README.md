@@ -1,49 +1,63 @@
 # Amplifier Foundation Examples
 
-Working examples demonstrating bundle loading and composition.
+**Learning Path**: Follow numbered examples in order for best understanding.
 
 ## Examples
 
-### simple_app.py
+### 01_load_and_inspect.py
+**Teachable Moment**: `load_bundle()` + `to_mount_plan()`
 
-Minimal example showing how to load a bundle and inspect its contents.
-
-```bash
-cd amplifier-foundation
-uv run python examples/simple_app.py
-```
-
-### load_remote_bundle.py
-
-Loading bundles from remote sources (Git, HTTP, Zip).
+Load a bundle from any source and inspect its contents.
 
 ```bash
-uv run python examples/load_remote_bundle.py
+uv run python examples/01_load_and_inspect.py
 ```
 
-### compose_bundles.py
+### 02_composition.py
+**Teachable Moment**: How `bundle.compose(overlay)` merges configuration
 
-Bundle composition patterns: declarative includes, imperative compose(), and composition rules.
+Understand the merge rules for session, providers, tools, and instruction.
 
 ```bash
-uv run python examples/compose_bundles.py
+uv run python examples/02_composition.py
 ```
 
-### end_to_end/
+### 03_sources_and_registry.py
+**Teachable Moment**: Source formats and `BundleRegistry`
 
-Interactive demo: Load foundation → Select provider → Enter prompt → Execute via AmplifierSession.
+Load from git URLs and use registry for named bundle management.
 
 ```bash
-uv run python examples/end_to_end/main.py
+uv run python examples/03_sources_and_registry.py
 ```
 
-See [end_to_end/README.md](end_to_end/README.md) for detailed usage and prerequisites.
+### 04_full_workflow/
+**Teachable Moment**: `prepare()` → `create_session()` → `execute()`
+
+Complete interactive demo with provider selection and LLM execution.
+
+```bash
+# Set API key first
+export ANTHROPIC_API_KEY="sk-..."
+
+uv run python examples/04_full_workflow/main.py
+```
 
 ## Running Examples
 
-All examples can be run from the `amplifier-foundation` directory:
+All examples run from the `amplifier-foundation` directory:
 
 ```bash
 cd amplifier-foundation
-uv run python examples/<example_name>.py
+uv run python examples/<example>.py
 ```
+
+## Learning Philosophy
+
+Each example teaches ONE concept:
+- **01**: Loading bundles
+- **02**: Composition rules
+- **03**: Source formats and registry
+- **04**: Full execution workflow
+
+For deeper understanding, see the code comments explaining the "why" behind each pattern.
