@@ -14,26 +14,32 @@ Foundation provides:
 pip install amplifier-foundation
 ```
 
-### Load and Compose Bundles
+### Load, Compose, and Execute
 
 ```python
 import asyncio
 from amplifier_foundation import load_bundle
 
 async def main():
-    # Load a bundle from local path or git URL
-    bundle = await load_bundle("./my-bundle")
+    # Load foundation bundle and a provider
+    foundation = await load_bundle("git+https://github.com/microsoft/amplifier-foundation@main")
+    provider = await load_bundle("./providers/anthropic.yaml")
 
-    # Compose with another bundle (later overrides earlier)
-    overlay = await load_bundle("./overlay-bundle")
-    composed = bundle.compose(overlay)
+    # Compose bundles (later overrides earlier)
+    composed = foundation.compose(provider)
 
-    # Get mount plan for AmplifierSession
-    mount_plan = composed.to_mount_plan()
-    print(f"Loaded: {bundle.name} v{bundle.version}")
+    # Prepare: resolves module sources, downloads if needed
+    prepared = await composed.prepare()
+
+    # Create session and execute
+    async with await prepared.create_session() as session:
+        response = await session.execute("Hello! What can you help me with?")
+        print(response)
 
 asyncio.run(main())
 ```
+
+For the complete workflow with provider selection and advanced features, see [`examples/04_full_workflow/`](examples/04_full_workflow/).
 
 ### Use Utilities Directly
 
@@ -98,15 +104,16 @@ md_files = find_files(Path("docs"), "**/*.md")
 
 This repo also contains reference bundle content for common configurations:
 
-| Directory | Content |
-|-----------|---------|
+| Path | Content |
+|------|---------|
+| `bundle.md` | **Main foundation bundle** - provider-agnostic base with streaming, tools, behaviors |
 | `providers/` | Provider configurations (anthropic, openai, azure, ollama) |
 | `agents/` | Reusable agent definitions |
-| `behaviors/` | Behavioral configurations |
+| `behaviors/` | Behavioral configurations (logging, redaction, status, etc.) |
 | `context/` | Shared context files |
 | `bundles/` | Complete bundle examples |
 
-**Note**: This content is just files - discovered and loaded like any other bundle.
+**Note**: This content is just files - discovered and loaded like any other bundle. See [PATTERNS.md](docs/PATTERNS.md) for usage examples.
 
 ## Examples
 
