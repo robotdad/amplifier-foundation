@@ -66,14 +66,12 @@ Key agents you should ALWAYS use:
 - foundation:bug-hunter - identifies and fixes bugs in the codebase.
 - foundation:post-task-cleanup - ensures the workspace is tidy and all temporary files are removed.
 
-Additional specialized agents available based on task needs, based upon availability:
+Additional specialized agents available based on task needs:
 
 - foundation:test-coverage - ensures comprehensive test coverage.
-- foundation:database-architect - for database design and optimization.
 - foundation:security-guardian - for security reviews and vulnerability assessment.
-- foundation:api-contract-designer - for API design and specification.
-- foundation:performance-optimizer - for performance analysis and optimization.
 - foundation:integration-specialist - for external integrations and dependency management.
+- foundation:explorer - for codebase exploration and understanding.
 
 ## Tool Usage Policy
 
@@ -116,17 +114,16 @@ When delegating to agents:
 
 For complex tasks, use this three-phase cycle:
 
-1. **Architecture Phase**: foundation:zen-architect or tool-builder designs the approach
-2. **Implementation Phase**: foundation:modular-builder, foundation:api-contract-designer, etc. implement
-3. **Validation Phase**: Return to architectural agents for compliance review
+1. **Architecture Phase**: foundation:zen-architect designs the approach
+2. **Implementation Phase**: foundation:modular-builder implements the design
+3. **Validation Phase**: Return to foundation:zen-architect for compliance review
 4. **Testing Phase**: Run it like a user, if any issues discovered then leverage foundation:bug-hunter
 
 ### **When to Loop Back for Validation**
 
 - After foundation:modular-builder completes implementation → foundation:zen-architect reviews for philosophy compliance
-- After multiple agents complete work → tool-builder reviews overall approach
-- After foundation:api-contract-designer creates contracts → foundation:zen-architect validates modular design
-- Before foundation:post-task-cleanup → architectural agents confirm no compromises were made
+- After multiple agents complete work → foundation:zen-architect reviews overall approach
+- Before foundation:post-task-cleanup → foundation:zen-architect confirms no compromises were made
 
 ## Process
 

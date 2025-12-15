@@ -154,20 +154,23 @@ from amplifier_foundation import BundleRegistry
 #### Constructor
 
 ```python
-BundleRegistry(
-    cache: CacheProviderProtocol | None = None,
-    source_resolver: SourceResolverProtocol | None = None,
-)
+BundleRegistry(home: Path | None = None)
 ```
+
+Parameters:
+- `home`: Base directory for registry operations. Resolves in order:
+  1. Explicit parameter value
+  2. `AMPLIFIER_HOME` environment variable
+  3. `~/.amplifier` (default)
 
 #### Methods
 
-**register(name: str, source: str) -> None**
+**register(bundles: dict[str, str]) -> None**
 
-Register a named bundle.
+Register name → URI mappings for bundles.
 
 ```python
-registry.register("my-bundle", "git+https://github.com/example/bundle@main")
+registry.register({"my-bundle": "git+https://github.com/example/bundle@main"})
 ```
 
 **load(name_or_uri: str) -> Bundle**
@@ -186,7 +189,7 @@ Get state for a registered bundle.
 ```python
 state = registry.get_state("my-bundle")
 if state:
-    print(f"Last loaded: {state.last_loaded}")
+    print(f"Loaded at: {state.loaded_at}")
 ```
 
 ### ValidationResult
