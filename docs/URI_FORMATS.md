@@ -96,16 +96,16 @@ Requires SSH key configured for the host.
 
 ### Subdirectory Access
 
-Access bundles in subdirectories:
+Access bundles in subdirectories using the pip/uv standard `#subdirectory=` format:
 
 ```
-git+https://github.com/org/monorepo@main#path/to/bundle
+git+https://github.com/org/monorepo@main#subdirectory=path/to/bundle
 ```
 
 Example:
 ```python
 # Bundle at bundles/dev in the repo
-bundle = await load_bundle("git+https://github.com/org/repo@main#bundles/dev")
+bundle = await load_bundle("git+https://github.com/org/repo@main#subdirectory=bundles/dev")
 ```
 
 ## Module Sources
@@ -131,12 +131,12 @@ Use `parse_uri()` to inspect URIs:
 ```python
 from amplifier_foundation import parse_uri
 
-parsed = parse_uri("git+https://github.com/org/repo@main#path")
+parsed = parse_uri("git+https://github.com/org/repo@main#subdirectory=bundles/dev")
 print(parsed.scheme)     # "git+https"
 print(parsed.host)       # "github.com"
-print(parsed.path)       # "org/repo"
+print(parsed.path)       # "/org/repo"
 print(parsed.ref)        # "main"
-print(parsed.subpath)    # "path"
+print(parsed.subpath)    # "bundles/dev"
 ```
 
 ## Resolution Process
@@ -155,7 +155,7 @@ Git sources are cached to avoid repeated downloads:
 from amplifier_foundation import BundleRegistry, DiskCache
 from pathlib import Path
 
-cache = DiskCache(Path("~/.cache/amplifier"))
+cache = DiskCache(Path("~/.amplifier/cache").expanduser())
 registry = BundleRegistry(cache=cache)
 
 # First load: clones repository

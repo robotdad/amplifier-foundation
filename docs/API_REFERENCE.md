@@ -505,7 +505,7 @@ Cache implementations.
 from amplifier_foundation import SimpleCache, DiskCache
 
 cache = SimpleCache()  # In-memory
-cache = DiskCache(Path("~/.cache/amplifier"))  # Persistent
+cache = DiskCache(Path("~/.amplifier/cache").expanduser())  # Persistent
 ```
 
 ## Type Exports
