@@ -46,6 +46,7 @@ agents:
     - foundation:modular-builder
     - foundation:post-task-cleanup
     - foundation:security-guardian
+    - foundation:session-finder
     - foundation:test-coverage
     - foundation:zen-architect
 ---
