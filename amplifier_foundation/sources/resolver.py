@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from amplifier_foundation.exceptions import BundleNotFoundError
+from amplifier_foundation.paths.resolution import ResolvedSource
 from amplifier_foundation.paths.resolution import get_amplifier_home
 from amplifier_foundation.paths.resolution import parse_uri
 
@@ -59,14 +60,14 @@ class SimpleSourceResolver:
         """
         self._handlers.insert(0, handler)  # Custom handlers take priority
 
-    async def resolve(self, uri: str) -> Path:
-        """Resolve a URI to a local path.
+    async def resolve(self, uri: str) -> ResolvedSource:
+        """Resolve a URI to local paths.
 
         Args:
             uri: URI string.
 
         Returns:
-            Local path to the resolved content.
+            ResolvedSource with active_path and source_root.
 
         Raises:
             BundleNotFoundError: If no handler can resolve the URI.

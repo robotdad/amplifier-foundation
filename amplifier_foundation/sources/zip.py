@@ -11,6 +11,7 @@ from urllib.request import urlopen
 
 from amplifier_foundation.exceptions import BundleNotFoundError
 from amplifier_foundation.paths.resolution import ParsedURI
+from amplifier_foundation.paths.resolution import ResolvedSource
 
 
 class ZipSourceHandler:
@@ -24,7 +25,7 @@ class ZipSourceHandler:
         """Check if this handler can handle the given URI."""
         return parsed.is_zip
 
-    async def resolve(self, parsed: ParsedURI, cache_dir: Path) -> Path:
+    async def resolve(self, parsed: ParsedURI, cache_dir: Path) -> ResolvedSource:
         """Resolve zip URI to local extracted path.
 
         Args:
@@ -32,7 +33,7 @@ class ZipSourceHandler:
             cache_dir: Directory for caching extracted content.
 
         Returns:
-            Local path to the extracted content.
+            ResolvedSource with active_path and source_root.
 
         Raises:
             BundleNotFoundError: If download/extraction fails.
@@ -60,7 +61,7 @@ class ZipSourceHandler:
             if parsed.subpath:
                 result_path = extract_path / parsed.subpath
             if result_path.exists():
-                return result_path
+                return ResolvedSource(active_path=result_path, source_root=extract_path)
 
         # Now check if source exists (for local files)
         if inner_scheme == "file" and zip_path and not zip_path.exists():
@@ -94,7 +95,7 @@ class ZipSourceHandler:
         if not result_path.exists():
             raise BundleNotFoundError(f"Subpath not found after extraction: {parsed.subpath}")
 
-        return result_path
+        return ResolvedSource(active_path=result_path, source_root=extract_path)
 
     def _extract_zip(self, zip_path: Path, extract_path: Path) -> None:
         """Extract a zip file to the target path.

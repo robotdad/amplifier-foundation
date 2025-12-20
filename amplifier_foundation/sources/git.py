@@ -9,6 +9,7 @@ from pathlib import Path
 
 from amplifier_foundation.exceptions import BundleNotFoundError
 from amplifier_foundation.paths.resolution import ParsedURI
+from amplifier_foundation.paths.resolution import ResolvedSource
 
 
 class GitSourceHandler:
@@ -22,7 +23,7 @@ class GitSourceHandler:
         """Check if this handler can handle the given URI."""
         return parsed.is_git
 
-    async def resolve(self, parsed: ParsedURI, cache_dir: Path) -> Path:
+    async def resolve(self, parsed: ParsedURI, cache_dir: Path) -> ResolvedSource:
         """Resolve git URI to local cached path.
 
         Args:
@@ -30,7 +31,7 @@ class GitSourceHandler:
             cache_dir: Directory for caching cloned repos.
 
         Returns:
-            Local path to the cloned content.
+            ResolvedSource with active_path and source_root.
 
         Raises:
             BundleNotFoundError: If clone fails or ref not found.
@@ -51,7 +52,7 @@ class GitSourceHandler:
             if parsed.subpath:
                 result_path = cache_path / parsed.subpath
             if result_path.exists():
-                return result_path
+                return ResolvedSource(active_path=result_path, source_root=cache_path)
 
         # Clone repository
         cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -84,4 +85,4 @@ class GitSourceHandler:
         if not result_path.exists():
             raise BundleNotFoundError(f"Subpath not found after clone: {parsed.subpath}")
 
-        return result_path
+        return ResolvedSource(active_path=result_path, source_root=cache_path)

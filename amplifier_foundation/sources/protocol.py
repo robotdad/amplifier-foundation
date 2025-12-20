@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 from amplifier_foundation.paths.resolution import ParsedURI
+from amplifier_foundation.paths.resolution import ResolvedSource
 
 
 class SourceResolverProtocol(Protocol):
@@ -15,17 +16,19 @@ class SourceResolverProtocol(Protocol):
     Apps may extend with additional source types or caching strategies.
     """
 
-    async def resolve(self, uri: str) -> Path:
-        """Resolve a URI to a local path.
+    async def resolve(self, uri: str) -> ResolvedSource:
+        """Resolve a URI to local paths.
 
         For remote sources (git, http), downloads to cache and returns
-        the local cache path.
+        the local cache path. Returns both the active path (what was
+        requested, possibly a subdirectory) and the source root (the
+        full clone/extract root).
 
         Args:
             uri: URI string (git+https://..., file://..., /path, ./path, name).
 
         Returns:
-            Local path to the resolved content.
+            ResolvedSource with active_path and source_root.
 
         Raises:
             BundleNotFoundError: If source cannot be resolved.
@@ -47,15 +50,15 @@ class SourceHandlerProtocol(Protocol):
         """
         ...
 
-    async def resolve(self, parsed: ParsedURI, cache_dir: Path) -> Path:
-        """Resolve the URI to a local path.
+    async def resolve(self, parsed: ParsedURI, cache_dir: Path) -> ResolvedSource:
+        """Resolve the URI to local paths.
 
         Args:
             parsed: Parsed URI components.
             cache_dir: Directory for caching downloaded content.
 
         Returns:
-            Local path to the resolved content.
+            ResolvedSource with active_path and source_root.
 
         Raises:
             BundleNotFoundError: If source cannot be resolved.

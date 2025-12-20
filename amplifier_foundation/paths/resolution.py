@@ -64,6 +64,32 @@ class ParsedURI:
         return self.scheme == "" and "/" not in self.path
 
 
+@dataclass
+class ResolvedSource:
+    """Result of resolving a source URI to local paths.
+
+    Tracks both the requested path (which may be a subdirectory) and the
+    source root (full clone/extract root), enabling @-mention resolution
+    to access files outside the immediate subdirectory when needed.
+
+    When loading from a subdirectory (e.g., git+https://...#subdirectory=behaviors/x),
+    the registry can walk back from active_path to source_root to find the nearest
+    bundle.md/bundle.yaml and register it for @-mention access.
+
+    Attributes:
+        active_path: The requested path (subdirectory or root).
+        source_root: The full clone/extract root (always the container root).
+    """
+
+    active_path: Path  # The requested path (subdirectory or root)
+    source_root: Path  # The full clone/extract root (always the container root)
+
+    @property
+    def is_subdirectory(self) -> bool:
+        """True if active_path is a subdirectory of source_root."""
+        return self.active_path != self.source_root
+
+
 def parse_uri(uri: str) -> ParsedURI:
     """Parse a URI into components.
 

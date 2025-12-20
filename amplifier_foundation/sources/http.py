@@ -8,6 +8,7 @@ from urllib.request import urlopen
 
 from amplifier_foundation.exceptions import BundleNotFoundError
 from amplifier_foundation.paths.resolution import ParsedURI
+from amplifier_foundation.paths.resolution import ResolvedSource
 
 
 class HttpSourceHandler:
@@ -24,7 +25,7 @@ class HttpSourceHandler:
         """Check if this handler can handle the given URI."""
         return parsed.is_http
 
-    async def resolve(self, parsed: ParsedURI, cache_dir: Path) -> Path:
+    async def resolve(self, parsed: ParsedURI, cache_dir: Path) -> ResolvedSource:
         """Resolve HTTP URI to local cached path.
 
         Args:
@@ -32,7 +33,7 @@ class HttpSourceHandler:
             cache_dir: Directory for caching downloaded content.
 
         Returns:
-            Local path to the downloaded file.
+            ResolvedSource with active_path and source_root.
 
         Raises:
             BundleNotFoundError: If download fails.
@@ -54,7 +55,7 @@ class HttpSourceHandler:
             if parsed.subpath:
                 result_path = cached_file / parsed.subpath
             if result_path.exists():
-                return result_path
+                return ResolvedSource(active_path=result_path, source_root=cached_file)
 
         # Ensure cache directory exists
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -74,4 +75,4 @@ class HttpSourceHandler:
             if not result_path.exists():
                 raise BundleNotFoundError(f"Subpath not found: {parsed.subpath}")
 
-        return result_path
+        return ResolvedSource(active_path=result_path, source_root=cached_file)

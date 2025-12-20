@@ -70,10 +70,12 @@ class ModuleActivator:
         # Skip if already activated this session
         cache_key = f"{module_name}:{source_uri}"
         if cache_key in self._activated:
-            return await self._resolver.resolve(source_uri)
+            resolved = await self._resolver.resolve(source_uri)
+            return resolved.active_path
 
         # Download module source
-        module_path = await self._resolver.resolve(source_uri)
+        resolved = await self._resolver.resolve(source_uri)
+        module_path = resolved.active_path
 
         # Install dependencies if requested
         if self.install_deps:

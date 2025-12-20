@@ -44,7 +44,8 @@ class TestFileSourceHandler:
             parsed = ParsedURI(scheme="file", host="", path=str(test_file), ref="", subpath="")
             result = await handler.resolve(parsed, Path(tmpdir) / "cache")
 
-            assert result == test_file
+            assert result.active_path == test_file
+            assert result.source_root == test_file
 
     @pytest.mark.asyncio
     async def test_resolve_with_subpath(self) -> None:
@@ -59,7 +60,8 @@ class TestFileSourceHandler:
             parsed = ParsedURI(scheme="file", host="", path=str(base / "bundles"), ref="", subpath="core")
             result = await handler.resolve(parsed, base / "cache")
 
-            assert result == subdir
+            assert result.active_path == subdir
+            assert result.source_root == (base / "bundles").resolve()
 
 
 class TestHttpSourceHandler:
@@ -134,9 +136,9 @@ class TestZipSourceHandler:
             parsed = ParsedURI(scheme="zip+file", host="", path=str(zip_path), ref="", subpath="")
             result = await handler.resolve(parsed, cache_dir)
 
-            assert result.exists()
-            assert (result / "bundle.yaml").exists()
-            assert (result / "context" / "readme.md").exists()
+            assert result.active_path.exists()
+            assert (result.active_path / "bundle.yaml").exists()
+            assert (result.active_path / "context" / "readme.md").exists()
 
     @pytest.mark.asyncio
     async def test_resolve_local_zip_with_subpath(self) -> None:
@@ -156,9 +158,10 @@ class TestZipSourceHandler:
             parsed = ParsedURI(scheme="zip+file", host="", path=str(zip_path), ref="", subpath="foundation")
             result = await handler.resolve(parsed, cache_dir)
 
-            assert result.exists()
-            assert result.name == "foundation"
-            assert (result / "bundle.yaml").exists()
+            assert result.active_path.exists()
+            assert result.active_path.name == "foundation"
+            assert (result.active_path / "bundle.yaml").exists()
+            assert result.source_root != result.active_path  # subpath creates a subdirectory
 
     @pytest.mark.asyncio
     async def test_uses_cache(self) -> None:
@@ -184,5 +187,5 @@ class TestZipSourceHandler:
             # Second resolve - uses cache
             result2 = await handler.resolve(parsed, cache_dir)
 
-            assert result1 == result2
-            assert result2.exists()
+            assert result1.active_path == result2.active_path
+            assert result2.active_path.exists()

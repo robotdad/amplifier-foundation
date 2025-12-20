@@ -253,13 +253,27 @@ class BundleRegistry:
 
         self._loading.add(uri)
         try:
-            # Resolve URI to local path
-            local_path = await self._source_resolver.resolve(uri)
-            if local_path is None:
+            # Resolve URI to local paths (active_path and source_root)
+            resolved = await self._source_resolver.resolve(uri)
+            if resolved is None:
                 raise BundleNotFoundError(f"Could not resolve URI: {uri}")
+
+            local_path = resolved.active_path
 
             # Load bundle from path
             bundle = await self._load_from_path(local_path)
+
+            # If loading from subdirectory, set up source_base_paths for root access
+            if resolved.is_subdirectory and bundle.name:
+                root_bundle_path = self._find_nearest_bundle_file(
+                    start=resolved.active_path.parent,
+                    stop=resolved.source_root,
+                )
+                if root_bundle_path:
+                    # Register source_root with this bundle's name as namespace
+                    # This enables @bundlename:path references to access the full source tree
+                    bundle.source_base_paths[bundle.name] = resolved.source_root
+                    logger.debug(f"Subdirectory bundle '{bundle.name}' can access source root via @{bundle.name}:path")
 
             # Auto-register if loading by URI
             if auto_register and registered_name is None and bundle.name:
@@ -437,6 +451,39 @@ class BundleRegistry:
             bundle_ref = include.get("bundle")
             if bundle_ref:
                 return str(bundle_ref)
+        return None
+
+    def _find_nearest_bundle_file(self, start: Path, stop: Path) -> Path | None:
+        """Walk up from start to stop looking for bundle.md or bundle.yaml.
+
+        This enables subdirectory bundles to discover their root bundle,
+        allowing access to shared resources in the source tree.
+
+        Args:
+            start: Directory to start searching from (typically subdirectory parent).
+            stop: Directory to stop searching at (the source_root).
+
+        Returns:
+            Path to the nearest bundle file, or None if not found.
+        """
+        current = start.resolve()
+        stop = stop.resolve()
+
+        while current >= stop:
+            bundle_md = current / "bundle.md"
+            bundle_yaml = current / "bundle.yaml"
+
+            if bundle_md.exists():
+                return bundle_md
+            if bundle_yaml.exists():
+                return bundle_yaml
+
+            # Don't go above stop
+            if current == stop:
+                break
+
+            current = current.parent
+
         return None
 
     # =========================================================================

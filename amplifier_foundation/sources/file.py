@@ -6,6 +6,7 @@ from pathlib import Path
 
 from amplifier_foundation.exceptions import BundleNotFoundError
 from amplifier_foundation.paths.resolution import ParsedURI
+from amplifier_foundation.paths.resolution import ResolvedSource
 
 
 class FileSourceHandler:
@@ -23,7 +24,7 @@ class FileSourceHandler:
         """Check if this handler can handle the given URI."""
         return parsed.is_file
 
-    async def resolve(self, parsed: ParsedURI, cache_dir: Path) -> Path:
+    async def resolve(self, parsed: ParsedURI, cache_dir: Path) -> ResolvedSource:
         """Resolve file URI to local path.
 
         Args:
@@ -31,7 +32,7 @@ class FileSourceHandler:
             cache_dir: Not used for local files.
 
         Returns:
-            Resolved local path.
+            ResolvedSource with active_path and source_root.
 
         Raises:
             BundleNotFoundError: If file doesn't exist.
@@ -40,17 +41,18 @@ class FileSourceHandler:
 
         # Handle relative paths
         if path_str.startswith("./") or path_str.startswith("../"):
-            path = self.base_path / path_str
+            source_root = self.base_path / path_str
         else:
-            path = Path(path_str)
+            source_root = Path(path_str)
 
-        path = path.resolve()
+        source_root = source_root.resolve()
 
         # Apply subpath if specified (from #subdirectory= fragment)
+        active_path = source_root
         if parsed.subpath:
-            path = path / parsed.subpath
+            active_path = source_root / parsed.subpath
 
-        if not path.exists():
-            raise BundleNotFoundError(f"File not found: {path}")
+        if not active_path.exists():
+            raise BundleNotFoundError(f"File not found: {active_path}")
 
-        return path
+        return ResolvedSource(active_path=active_path, source_root=source_root)
