@@ -294,7 +294,9 @@ class RetryHandler:
                 print(f"\n🔄 RETRY: Attempt {retry_count + 1}/{self.max_retries} after {wait_time:.1f}s")
 
                 await asyncio.sleep(wait_time)
-                return HookResult(action="retry")  # Note: Amplifier would need to support this
+                # Note: "retry" action is aspirational - Amplifier doesn't support it yet
+                # For now, continue and let the operation proceed after the backoff delay
+                return HookResult(action="continue")
 
         return HookResult(action="continue")
 

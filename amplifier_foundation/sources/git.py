@@ -230,7 +230,8 @@ class GitSourceHandler:
                 status.summary = f"Not cached (remote: {status.remote_commit[:8]})"
             elif status.cached_commit == status.remote_commit:
                 status.has_update = False
-                status.summary = f"Up to date ({status.cached_commit[:8]})"
+                cached_short = status.cached_commit[:8] if status.cached_commit else "unknown"
+                status.summary = f"Up to date ({cached_short})"
             else:
                 status.has_update = True
                 cached_short = status.cached_commit[:8] if status.cached_commit else "unknown"

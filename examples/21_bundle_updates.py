@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from amplifier_foundation import Bundle
 from amplifier_foundation import BundleStatus
@@ -32,10 +31,6 @@ from amplifier_foundation import check_bundle_status
 from amplifier_foundation import load_bundle
 from amplifier_foundation import refresh_bundle
 from amplifier_foundation.sources.protocol import SourceStatus
-
-if TYPE_CHECKING:
-    pass
-
 
 # ============================================================================
 # Example 1: Basic Status Checking

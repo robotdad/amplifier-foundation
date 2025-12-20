@@ -23,11 +23,9 @@ When you'd use this:
 import asyncio
 from pathlib import Path
 from typing import Any
+from typing import Literal
 
 from amplifier_core import AmplifierSession
-from amplifier_core import ApprovalProvider
-from amplifier_core import ApprovalRequest
-from amplifier_core import ApprovalResponse
 from amplifier_foundation import load_bundle
 
 # ============================================================================
@@ -35,12 +33,14 @@ from amplifier_foundation import load_bundle
 # ============================================================================
 
 
-class InteractiveApprovalSystem(ApprovalProvider):
+class InteractiveApprovalSystem:
     """
     Approval system that prompts the user interactively.
 
+    Implements ApprovalSystem protocol for AmplifierSession.
+
     Features:
-    - Shows tool name, arguments, and reasoning
+    - Shows prompt and available options
     - Allows approve/reject/approve-all decisions
     - Maintains audit trail of decisions
     - Supports auto-approval rules
@@ -51,97 +51,71 @@ class InteractiveApprovalSystem(ApprovalProvider):
         self.audit_trail: list[dict[str, Any]] = []
         self.approve_all = False
 
-    async def request_approval(self, request: ApprovalRequest) -> ApprovalResponse:
-        """Request approval for a tool use."""
+    async def request_approval(
+        self, prompt: str, options: list[str], timeout: float, default: Literal["allow", "deny"]
+    ) -> str:
+        """Request approval from the user.
 
-        # Check auto-approve rules
-        if self.approve_all or request.tool_name in self.auto_approve_tools:
-            response = ApprovalResponse(
-                approved=True,
-                reason="Auto-approved",
-                remember=False,
-            )
-            self._log_decision(request, response, auto=True)
-            return response
+        Args:
+            prompt: Question to ask user
+            options: Available choices
+            timeout: Seconds to wait for response
+            default: Action to take on timeout
+
+        Returns:
+            Selected option string (one of options)
+        """
+        # Check if auto-approve is enabled
+        if self.approve_all:
+            self._log_decision(prompt, options[0] if options else "allow", auto=True)
+            return options[0] if options else "allow"
 
         # Interactive approval
         print("\n" + "=" * 80)
         print("🚨 APPROVAL REQUIRED")
         print("=" * 80)
-        print(f"\n📋 Tool: {request.tool_name}")
-        print(f"📝 Action: {request.action}")
-        print(f"⚠️  Risk Level: {request.risk_level}")
-        print("\n🔧 Details:")
-        for key, value in request.details.items():
-            # Truncate long values for display
-            display_value = str(value)
-            if len(display_value) > 200:
-                display_value = display_value[:200] + "..."
-            print(f"   {key}: {display_value}")
+        print(f"\n📋 {prompt}")
+        print(f"\n⏱️  Timeout: {timeout}s (default: {default})")
 
         print("\n" + "-" * 80)
         print("Options:")
-        print("  [y] Approve")
-        print("  [n] Reject")
+        for i, option in enumerate(options, 1):
+            print(f"  [{i}] {option}")
         print("  [a] Approve ALL remaining requests")
-        print("  [i] Approve and ignore this tool in future")
         print("-" * 80)
 
         while True:
             choice = input("\nYour decision: ").strip().lower()
 
-            if choice == "y":
-                response = ApprovalResponse(
-                    approved=True,
-                    reason="User approved",
-                    remember=False,
-                )
-                break
-            if choice == "n":
-                reason = input("Reason for rejection (optional): ").strip()
-                response = ApprovalResponse(
-                    approved=False,
-                    reason=reason or "User rejected",
-                    remember=False,
-                )
-                break
             if choice == "a":
                 self.approve_all = True
-                response = ApprovalResponse(
-                    approved=True,
-                    reason="Approved all",
-                    remember=False,
-                )
+                selected = options[0] if options else "allow"
                 print("\n✅ All future requests will be auto-approved")
-                break
-            if choice == "i":
-                self.auto_approve_tools.append(request.tool_name)
-                response = ApprovalResponse(
-                    approved=True,
-                    reason=f"Auto-approving {request.tool_name}",
-                    remember=True,
-                )
-                print(f"\n✅ Will auto-approve all future '{request.tool_name}' requests")
-                break
-            print("❌ Invalid choice. Please enter y, n, a, or i.")
+                self._log_decision(prompt, selected, auto=False)
+                return selected
 
-        self._log_decision(request, response, auto=False)
-        return response
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(options):
+                    selected = options[idx]
+                    self._log_decision(prompt, selected, auto=False)
+                    return selected
+            except ValueError:
+                pass
 
-    def _log_decision(self, request: ApprovalRequest, response: ApprovalResponse, auto: bool):
+            print(f"❌ Invalid choice. Please enter 1-{len(options)} or 'a'.")
+
+    def _log_decision(self, prompt: str, decision: str, auto: bool) -> None:
         """Log approval decision to audit trail."""
         self.audit_trail.append(
             {
-                "tool": request.tool_name,
-                "action": request.action,
-                "approved": response.approved,
+                "prompt": prompt,
+                "decision": decision,
                 "auto": auto,
-                "reason": response.reason,
-                "risk_level": request.risk_level,
             }
         )
 
-    def print_audit_trail(self):
+    def print_audit_trail(self) -> None:
         """Print the audit trail of all approval decisions."""
         if not self.audit_trail:
             print("\n📊 No approval requests")
@@ -151,13 +125,9 @@ class InteractiveApprovalSystem(ApprovalProvider):
         print("📊 AUDIT TRAIL")
         print("=" * 80)
         for i, entry in enumerate(self.audit_trail, 1):
-            status_emoji = "✅" if entry["approved"] else "❌"
             auto_label = " (auto)" if entry["auto"] else ""
-            print(f"\n{i}. {status_emoji} {entry['tool']}{auto_label}")
-            print(f"   Action: {entry['action']}")
-            print(f"   Risk: {entry['risk_level']}")
-            if entry["reason"]:
-                print(f"   Reason: {entry['reason']}")
+            print(f"\n{i}. {entry['decision']}{auto_label}")
+            print(f"   Prompt: {entry['prompt']}")
 
 
 # ============================================================================
