@@ -45,11 +45,44 @@ See the full flow: `prepare()` → `create_session()` → `execute()`. Interacti
 ### 🏗️ Tier 3: Building Applications (08-09)
 **Goal:** Production patterns and complex systems
 
-**[08_cli_application.py](./08_cli_application.py)** - CLI application architecture  
+**[08_cli_application.py](./08_cli_application.py)** - CLI application architecture
 See application architecture patterns: configuration management, logging, error handling, lifecycle management. Build reusable application classes.
 
-**[09_multi_agent_system.py](./09_multi_agent_system.py)** - Coordinate specialized agents  
+**[09_multi_agent_system.py](./09_multi_agent_system.py)** - Coordinate specialized agents
 Create specialized agents (Architect, Implementer, Reviewer) with different tools and instructions. See sequential workflows and context passing between agents.
+
+### 🌍 Tier 4: Real-World Applications (10-21)
+**Goal:** Practical use cases and advanced patterns
+
+**[10_meeting_notes_to_actions.py](./10_meeting_notes_to_actions.py)** - Text processing workflow
+Transform meeting notes into structured action items. Shows practical document processing.
+
+**[11_provider_comparison.py](./11_provider_comparison.py)** - Compare LLM providers
+Run the same prompt across multiple providers. Useful for evaluation and selection.
+
+**[12_approval_gates.py](./12_approval_gates.py)** - Human-in-the-loop patterns
+Add approval gates for sensitive operations. See hooks for control flow.
+
+**[13_event_debugging.py](./13_event_debugging.py)** - Session observability
+Debug and monitor session events. Learn the event system for observability.
+
+**[14_session_persistence.py](./14_session_persistence.py)** - Save and restore sessions
+Persist session state across runs. Enable conversation continuity.
+
+**[17_multi_model_ensemble.py](./17_multi_model_ensemble.py)** - Ensemble patterns
+Combine multiple models for improved results. Advanced orchestration patterns.
+
+**[18_custom_hooks.py](./18_custom_hooks.py)** - Build custom hooks
+Create hooks for logging, redaction, and control. Extend session behavior.
+
+**[19_github_actions_ci.py](./19_github_actions_ci.py)** - CI/CD integration
+Run Amplifier in GitHub Actions. Automation and testing patterns.
+
+**[20_calendar_assistant.py](./20_calendar_assistant.py)** - External API integration
+Build a calendar assistant with external API calls. Real-world integration patterns.
+
+**[21_bundle_updates.py](./21_bundle_updates.py)** - Bundle update detection
+Check for and apply updates to bundle sources. Two-phase pattern: check status (no side effects) → refresh (side effects). Foundation provides mechanism, app provides policy.
 
 ## Learning Paths
 

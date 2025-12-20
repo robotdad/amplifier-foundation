@@ -69,8 +69,15 @@ from amplifier_foundation.registry import BundleState
 from amplifier_foundation.registry import UpdateInfo
 from amplifier_foundation.registry import load_bundle
 from amplifier_foundation.sources.protocol import SourceHandlerProtocol
+from amplifier_foundation.sources.protocol import SourceHandlerWithStatusProtocol
 from amplifier_foundation.sources.protocol import SourceResolverProtocol
+from amplifier_foundation.sources.protocol import SourceStatus
 from amplifier_foundation.sources.resolver import SimpleSourceResolver
+
+# Updates - bundle update checking and refresh
+from amplifier_foundation.updates import BundleStatus
+from amplifier_foundation.updates import check_bundle_status
+from amplifier_foundation.updates import refresh_bundle
 from amplifier_foundation.validator import BundleValidator
 from amplifier_foundation.validator import ValidationResult
 from amplifier_foundation.validator import validate_bundle
@@ -97,7 +104,13 @@ __all__ = [
     "MentionResolverProtocol",
     "SourceResolverProtocol",
     "SourceHandlerProtocol",
+    "SourceHandlerWithStatusProtocol",
+    "SourceStatus",
     "CacheProviderProtocol",
+    # Updates
+    "BundleStatus",
+    "check_bundle_status",
+    "refresh_bundle",
     # Reference implementations
     "BaseMentionResolver",
     "SimpleSourceResolver",
