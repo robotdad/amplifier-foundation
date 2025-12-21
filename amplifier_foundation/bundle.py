@@ -104,7 +104,14 @@ class Bundle:
         )
 
         for other in others:
-            # Track source base_path before name override (for @mention resolution)
+            # Merge other's source_base_paths first (preserves registry-set values like source_root)
+            # This is critical for subdirectory bundles where registry sets source_root mapping
+            if other.source_base_paths:
+                for ns, path in other.source_base_paths.items():
+                    if ns not in result.source_base_paths:
+                        result.source_base_paths[ns] = path
+
+            # Also track other's own namespace as fallback (if not already set via source_base_paths)
             if other.name and other.base_path and other.name not in result.source_base_paths:
                 result.source_base_paths[other.name] = other.base_path
 

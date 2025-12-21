@@ -264,16 +264,28 @@ class BundleRegistry:
             bundle = await self._load_from_path(local_path)
 
             # If loading from subdirectory, set up source_base_paths for root access
-            if resolved.is_subdirectory and bundle.name:
+            if resolved.is_subdirectory:
                 root_bundle_path = self._find_nearest_bundle_file(
                     start=resolved.active_path.parent,
                     stop=resolved.source_root,
                 )
                 if root_bundle_path:
-                    # Register source_root with this bundle's name as namespace
-                    # This enables @bundlename:path references to access the full source tree
-                    bundle.source_base_paths[bundle.name] = resolved.source_root
-                    logger.debug(f"Subdirectory bundle '{bundle.name}' can access source root via @{bundle.name}:path")
+                    # Load root bundle to get its name for namespace registration
+                    # This allows @rootname:path references (e.g., @recipes:examples/)
+                    root_bundle = await self._load_from_path(root_bundle_path)
+                    if root_bundle.name:
+                        bundle.source_base_paths[root_bundle.name] = resolved.source_root
+                        logger.debug(
+                            f"Subdirectory bundle '{bundle.name}' registered root namespace "
+                            f"@{root_bundle.name}: -> {resolved.source_root}"
+                        )
+                    # Also register subdirectory bundle's own name if different
+                    if bundle.name and bundle.name != root_bundle.name:
+                        bundle.source_base_paths[bundle.name] = resolved.source_root
+                        logger.debug(
+                            f"Subdirectory bundle also registered own namespace "
+                            f"@{bundle.name}: -> {resolved.source_root}"
+                        )
 
             # Auto-register if loading by URI
             if auto_register and registered_name is None and bundle.name:
