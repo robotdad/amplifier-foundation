@@ -246,7 +246,7 @@ Modules need `source` fields so `prepare()` can download them:
 ```
 
 ### First Run Takes 30+ Seconds
-This is normal - modules are downloaded from GitHub and cached in `~/.amplifier/modules/`. Subsequent runs are fast.
+This is normal - modules are downloaded from GitHub and cached in `~/.amplifier/cache/`. Subsequent runs are fast.
 
 ### "API key error"
 Set your provider's API key:

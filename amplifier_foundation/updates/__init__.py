@@ -152,7 +152,7 @@ async def check_bundle_status(
 
     Args:
         bundle: Bundle to check.
-        cache_dir: Cache directory for modules. Defaults to ~/.amplifier/modules.
+        cache_dir: Cache directory for modules. Defaults to ~/.amplifier/cache.
 
     Returns:
         BundleStatus with status of each source.
@@ -211,7 +211,7 @@ async def refresh_bundle(
 
     Args:
         bundle: Bundle to refresh.
-        cache_dir: Cache directory for modules. Defaults to ~/.amplifier/modules.
+        cache_dir: Cache directory for modules. Defaults to ~/.amplifier/cache.
         selective: If provided, only refresh these source URIs.
             If None, refreshes all sources with available updates.
 

@@ -49,7 +49,7 @@ class ModuleActivator:
                        bundle's base_path so relative paths like ./modules/foo
                        resolve correctly.
         """
-        self.cache_dir = cache_dir or get_amplifier_home() / "modules"
+        self.cache_dir = cache_dir or get_amplifier_home() / "cache"
         self.install_deps = install_deps
         self._resolver = SimpleSourceResolver(cache_dir=self.cache_dir, base_path=base_path)
         self._activated: set[str] = set()
