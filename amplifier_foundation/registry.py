@@ -263,6 +263,9 @@ class BundleRegistry:
             # Load bundle from path
             bundle = await self._load_from_path(local_path)
 
+            # Store source URI for update checking (used by check_bundle_status)
+            bundle._source_uri = uri  # type: ignore[attr-defined]
+
             # If loading from subdirectory, set up source_base_paths for root access
             if resolved.is_subdirectory:
                 root_bundle_path = self._find_nearest_bundle_file(
