@@ -53,7 +53,7 @@ agents:
 
 # Core Instructions
 
-@foundation:context/shared/common-profile-base.md
+@foundation:context/shared/common-system-base.md
 
 ---
 

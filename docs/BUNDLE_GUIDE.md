@@ -20,6 +20,525 @@ Bundles are the primary way to share and compose AI agent configurations.
 
 ---
 
+## The Thin Bundle Pattern (Recommended)
+
+**Most bundles should be thin** - inheriting from foundation and adding only their unique capabilities.
+
+### The Problem
+
+When creating bundles that include foundation, a common mistake is to **redeclare things foundation already provides**:
+
+```yaml
+# ❌ BAD: Fat bundle that duplicates foundation
+includes:
+  - bundle: foundation
+
+session:              # ❌ Foundation already defines this!
+  orchestrator:
+    module: loop-streaming
+    source: git+https://github.com/...
+  context:
+    module: context-simple
+
+tools:                # ❌ Foundation already has these!
+  - module: tool-filesystem
+    source: git+https://github.com/...
+  - module: tool-bash
+    source: git+https://github.com/...
+
+hooks:                # ❌ Foundation already has these!
+  - module: hooks-streaming-ui
+    source: git+https://github.com/...
+```
+
+This duplication:
+- Creates maintenance burden (update in two places)
+- Can cause version conflicts
+- Misses foundation updates automatically
+
+### The Solution: Thin Bundles
+
+A **thin bundle** only declares what it uniquely provides:
+
+```yaml
+# ✅ GOOD: Thin bundle inherits from foundation
+---
+bundle:
+  name: my-capability
+  version: 1.0.0
+  description: Adds X capability
+
+includes:
+  - bundle: git+https://github.com/microsoft/amplifier-foundation@main
+  - bundle: my-capability:behaviors/my-capability    # Behavior pattern
+
+---
+
+# My Capability
+
+@my-capability:context/instructions.md
+
+---
+
+@foundation:context/shared/common-system-base.md
+```
+
+**That's it.** All tools, session config, and hooks come from foundation.
+
+### Exemplar: amplifier-bundle-recipes
+
+See [amplifier-bundle-recipes](https://github.com/microsoft/amplifier-bundle-recipes) for the canonical example:
+
+```yaml
+# amplifier-bundle-recipes/bundle.md - Only 14 lines of YAML!
+---
+bundle:
+  name: recipes
+  version: 1.0.0
+  description: Multi-step AI agent orchestration for repeatable workflows
+
+includes:
+  - bundle: git+https://github.com/microsoft/amplifier-foundation@main
+  - bundle: recipes:behaviors/recipes
+---
+
+# Recipe System
+
+@recipes:context/recipe-instructions.md
+
+---
+
+@foundation:context/shared/common-system-base.md
+```
+
+**Key observations**:
+- No `tools:`, `session:`, or `hooks:` declarations (inherited from foundation)
+- Uses behavior pattern for its unique capabilities
+- References consolidated instructions file
+- Minimal markdown body
+
+---
+
+## The Behavior Pattern
+
+A **behavior** is a reusable capability add-on that bundles agents + context (and optionally tools/hooks). Behaviors live in `behaviors/` and can be included by any bundle.
+
+### Why Behaviors?
+
+Behaviors enable:
+- **Reusability** - Add capability to any bundle
+- **Modularity** - Separate concerns cleanly
+- **Composition** - Mix and match behaviors
+
+### Behavior File Structure
+
+```yaml
+# behaviors/my-capability.yaml
+bundle:
+  name: my-capability-behavior
+  version: 1.0.0
+  description: Adds X capability with agents and context
+
+# Optional: Add tools specific to this capability
+tools:
+  - module: tool-my-capability
+    source: git+https://github.com/microsoft/amplifier-bundle-my-capability@main#subdirectory=modules/tool-my-capability
+
+# Declare agents this behavior provides
+agents:
+  include:
+    - my-capability:agent-one
+    - my-capability:agent-two
+
+# Declare context files this behavior includes
+context:
+  include:
+    - my-capability:context/instructions.md
+```
+
+### Using Behaviors
+
+Include a behavior in your bundle:
+
+```yaml
+includes:
+  - bundle: foundation
+  - bundle: my-capability:behaviors/my-capability   # From same bundle
+  - bundle: git+https://github.com/org/bundle@main#subdirectory=behaviors/foo.yaml  # External
+```
+
+### Exemplar: recipes behavior
+
+See [amplifier-bundle-recipes/behaviors/recipes.yaml](https://github.com/microsoft/amplifier-bundle-recipes):
+
+```yaml
+bundle:
+  name: recipes-behavior
+  version: 1.0.0
+  description: Multi-step AI agent orchestration via declarative YAML recipes
+
+tools:
+  - module: tool-recipes
+    source: git+https://github.com/microsoft/amplifier-bundle-recipes@main#subdirectory=modules/tool-recipes
+    config:
+      session_dir: ~/.amplifier/projects/{project}/recipe-sessions
+      auto_cleanup_days: 7
+
+agents:
+  include:
+    - recipes:recipe-author
+    - recipes:result-validator
+
+context:
+  include:
+    - recipes:context/recipe-instructions.md
+```
+
+**Key observations**:
+- Adds a tool specific to this capability
+- Declares the agents this behavior provides
+- References consolidated context file
+- Can be included by foundation OR any other bundle
+
+---
+
+## Context De-duplication
+
+**Consolidate instructions into a single file** rather than inline in bundle.md.
+
+### The Problem
+
+Inline instructions in bundle.md cause:
+- Duplication if behavior also needs to reference them
+- Large bundle.md files that are hard to maintain
+- Harder to reuse context across bundles
+
+### The Solution: Consolidated Context Files
+
+Create `context/instructions.md` with all the instructions:
+
+```markdown
+# My Capability Instructions
+
+You have access to the my-capability tool...
+
+## Usage
+
+[Detailed instructions]
+
+## Agents Available
+
+[Agent descriptions]
+```
+
+Reference it from your behavior:
+
+```yaml
+# behaviors/my-capability.yaml
+context:
+  include:
+    - my-capability:context/instructions.md
+```
+
+And from your bundle.md:
+
+```markdown
+---
+bundle:
+  name: my-capability
+includes:
+  - bundle: foundation
+  - bundle: my-capability:behaviors/my-capability
+---
+
+# My Capability
+
+@my-capability:context/instructions.md
+
+---
+
+@foundation:context/shared/common-system-base.md
+```
+
+### Exemplar: recipes instructions
+
+See [amplifier-bundle-recipes/context/recipe-instructions.md](https://github.com/microsoft/amplifier-bundle-recipes):
+- Single source of truth for recipe system instructions
+- Referenced by both `behaviors/recipes.yaml` AND `bundle.md`
+- No duplication
+
+---
+
+## Bundle Directory Structure
+
+### Thin Bundle (Recommended)
+
+```
+my-bundle/
+├── bundle.md                 # Thin: includes + context refs only
+├── behaviors/
+│   └── my-capability.yaml    # Reusable behavior
+├── agents/                   # Agent definitions
+│   ├── agent-one.md
+│   └── agent-two.md
+├── context/
+│   └── instructions.md       # Consolidated instructions
+├── docs/                     # Additional documentation
+├── README.md
+├── LICENSE
+├── SECURITY.md
+└── CODE_OF_CONDUCT.md
+```
+
+### Bundle with Local Modules
+
+```
+my-bundle/
+├── bundle.md
+├── behaviors/
+│   └── my-capability.yaml
+├── agents/
+├── context/
+├── modules/                  # Local modules (when needed)
+│   └── tool-my-capability/
+│       ├── pyproject.toml    # Module's package config
+│       └── my_module/
+├── docs/
+├── README.md
+└── ...
+```
+
+**Note**: No `pyproject.toml` at the root. Only modules inside `modules/` need their own `pyproject.toml`.
+
+---
+
+## Creating a Bundle Step-by-Step
+
+### Step 1: Decide Your Pattern
+
+**Ask yourself**:
+- Does my bundle add capability to foundation? → **Use thin bundle + behavior pattern**
+- Is my bundle standalone (no foundation dependency)? → Declare everything you need
+- Do I want my capability reusable by other bundles? → **Create a behavior**
+
+### Step 2: Create Behavior (if adding to foundation)
+
+Create `behaviors/my-capability.yaml`:
+
+```yaml
+bundle:
+  name: my-capability-behavior
+  version: 1.0.0
+  description: Adds X capability
+
+agents:
+  include:
+    - my-capability:my-agent
+
+context:
+  include:
+    - my-capability:context/instructions.md
+```
+
+### Step 3: Create Consolidated Instructions
+
+Create `context/instructions.md`:
+
+```markdown
+# My Capability Instructions
+
+You have access to the my-capability tool for [purpose].
+
+## Available Agents
+
+- **my-agent** - Does X, useful for Y
+
+## Usage Guidelines
+
+[Instructions for the AI on how to use this capability]
+```
+
+### Step 4: Create Agent Definitions
+
+Place agent files in `agents/` with proper frontmatter:
+
+```markdown
+---
+meta:
+  name: my-agent
+  description: "Description shown when listing agents. Include usage examples..."
+---
+
+# My Agent
+
+You are a specialized agent for [specific purpose].
+
+## Your Capabilities
+
+[Agent-specific instructions]
+```
+
+### Step 5: Create Thin bundle.md
+
+```markdown
+---
+bundle:
+  name: my-capability
+  version: 1.0.0
+  description: Provides X capability
+
+includes:
+  - bundle: git+https://github.com/microsoft/amplifier-foundation@main
+  - bundle: my-capability:behaviors/my-capability
+---
+
+# My Capability
+
+@my-capability:context/instructions.md
+
+---
+
+@foundation:context/shared/common-system-base.md
+```
+
+### Step 6: Add README and Standard Files
+
+Create README.md documenting:
+- What the bundle provides
+- The architecture (thin bundle + behavior pattern)
+- How to load/use it
+
+---
+
+## Anti-Patterns to Avoid
+
+### ❌ Duplicating Foundation
+
+```yaml
+# DON'T DO THIS when you include foundation
+includes:
+  - bundle: foundation
+
+tools:
+  - module: tool-filesystem     # Foundation has this!
+    source: git+https://...
+
+session:
+  orchestrator:                 # Foundation has this!
+    module: loop-streaming
+```
+
+**Why it's bad**: Creates maintenance burden, version conflicts, misses foundation updates.
+
+**Fix**: Remove duplicated declarations. Foundation provides them.
+
+### ❌ Inline Instructions in bundle.md
+
+```yaml
+---
+bundle:
+  name: my-bundle
+---
+
+# Instructions
+
+[500 lines of instructions here]
+
+## Usage
+
+[More instructions]
+```
+
+**Why it's bad**: Can't be reused by behavior, hard to maintain, can't be referenced separately.
+
+**Fix**: Move to `context/instructions.md` and reference with `@my-bundle:context/instructions.md`.
+
+### ❌ Skipping the Behavior Pattern
+
+```yaml
+# DON'T DO THIS for capability bundles
+---
+bundle:
+  name: my-capability
+
+includes:
+  - bundle: foundation
+
+agents:
+  include:
+    - my-capability:agent-one
+    - my-capability:agent-two
+---
+
+[All instructions inline]
+```
+
+**Why it's bad**: Your capability can't be added to other bundles without including your whole bundle.
+
+**Fix**: Create `behaviors/my-capability.yaml` with agents + context, then include it.
+
+### ❌ Fat Bundles for Simple Capabilities
+
+```yaml
+# DON'T create complex bundles when a behavior would suffice
+---
+bundle:
+  name: simple-feature
+  version: 1.0.0
+
+includes:
+  - bundle: foundation
+
+session:
+  orchestrator: ...    # Unnecessary
+  context: ...         # Unnecessary
+
+tools:
+  - module: tool-x     # Could be in behavior
+    source: ...
+
+agents:
+  include:             # Could be in behavior
+    - simple-feature:agent-a
+---
+
+[Instructions that could be in context/]
+```
+
+**Fix**: If you're just adding agents + maybe a tool, use a behavior YAML only.
+
+---
+
+## Decision Framework
+
+### When to Include Foundation
+
+| Scenario | Recommendation |
+|----------|---------------|
+| Adding capability to AI assistants | ✅ Include foundation |
+| Creating standalone tool | ❌ Don't need foundation |
+| Need base tools (filesystem, bash, web) | ✅ Include foundation |
+| Building on existing bundle | ✅ Include that bundle |
+
+### When to Use Behaviors
+
+| Scenario | Recommendation |
+|----------|---------------|
+| Adding agents + context | ✅ Use behavior |
+| Adding tool + agents | ✅ Use behavior |
+| Want others to use your capability | ✅ Use behavior |
+| Creating a simple bundle variant | ❌ Just use includes |
+
+### When to Create Local Modules
+
+| Scenario | Recommendation |
+|----------|---------------|
+| Tool is bundle-specific | ✅ Keep in `modules/` |
+| Tool is generally useful | ❌ Extract to separate repo |
+| Multiple bundles need the tool | ❌ Extract to separate repo |
+
+---
+
 ## Bundle File Structure
 
 A bundle is a markdown file with YAML frontmatter:
@@ -33,7 +552,9 @@ bundle:
 
 includes:
   - bundle: foundation              # Inherit from other bundles
+  - bundle: my-bundle:behaviors/x   # Include behaviors
 
+# Only declare tools NOT inherited from includes
 tools:
   - module: tool-name
     source: ./modules/tool-name     # Local path
@@ -44,9 +565,10 @@ agents:
   include:
     - my-bundle:agent-name          # Reference agents in this bundle
 
+# Only declare hooks NOT inherited from includes
 hooks:
-  - module: hooks-logging
-    source: git+https://github.com/microsoft/amplifier-module-hooks-logging@main
+  - module: hooks-custom
+    source: git+https://github.com/...
 ---
 
 # System Instructions
@@ -56,181 +578,6 @@ Your markdown instructions here. This becomes the system prompt.
 Reference documentation with @mentions:
 @my-bundle:docs/GUIDE.md
 ```
-
----
-
-## Bundle Directory Structure
-
-A typical bundle repository:
-
-```
-my-bundle/
-├── bundle.md                 # Main bundle definition
-├── agents/                   # Agent definitions
-│   └── my-agent.md
-├── modules/                  # Local modules (optional)
-│   └── tool-my-tool/
-│       ├── pyproject.toml    # Module's own package config
-│       └── my_module/
-│           └── __init__.py   # Contains mount() function
-├── docs/                     # Documentation (can be @mentioned)
-├── README.md                 # For humans browsing the repo
-├── LICENSE
-├── SECURITY.md
-└── CODE_OF_CONDUCT.md
-```
-
-**Note**: No `pyproject.toml` at the root. Bundles are configuration, not Python packages. Only modules inside `modules/` need their own `pyproject.toml`.
-
----
-
-## Creating a Bundle Step-by-Step
-
-### Step 1: Create bundle.md
-
-The bundle definition file at your repository root:
-
-```markdown
----
-bundle:
-  name: my-capability
-  version: 1.0.0
-  description: Provides X capability for Y purpose
-
-includes:
-  - bundle: foundation    # Optional: inherit from foundation
-
-tools:
-  - module: tool-my-capability
-    source: ./modules/tool-my-capability
-    config:
-      default_setting: value
-
-agents:
-  include:
-    - my-capability:helper-agent
----
-
-# My Capability
-
-You have access to the my-capability tool.
-
-## Usage
-
-[Instructions for the agent on how to use this capability]
-
-For details, see @my-capability:docs/USAGE.md
-```
-
-### Step 2: Create Agent Definitions
-
-Place agent files in `agents/` with proper frontmatter:
-
-```markdown
----
-meta:
-  name: helper-agent
-  description: "Description shown when listing agents. Include usage examples..."
----
-
-# Helper Agent
-
-You are a specialized agent for [specific purpose].
-
-## Your Capabilities
-
-[Agent-specific instructions]
-
-## Guidelines
-
-[Behavioral guidelines]
-```
-
-**Frontmatter requirements**:
-- `meta.name` - Agent identifier (used in `agents: include:`)
-- `meta.description` - Shown in agent listings, should include examples
-
-### Step 3: Create Local Modules (if needed)
-
-For custom tools, create a module in `modules/`:
-
-```
-modules/tool-my-capability/
-├── pyproject.toml
-└── my_module_name/
-    └── __init__.py
-```
-
-**pyproject.toml** (inside the module directory):
-```toml
-[project]
-name = "amplifier-module-tool-my-capability"
-version = "0.1.0"
-dependencies = ["pyyaml>=6.0"]  # Your dependencies
-
-[project.entry-points."amplifier.modules"]
-tool-my-capability = "my_module_name:mount"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-```
-
-**__init__.py**:
-```python
-async def mount(coordinator, config):
-    """Mount the tool module."""
-    tool = MyCapabilityTool(config)
-    coordinator.mount_points["tools"]["my-capability"] = tool
-    return tool
-
-class MyCapabilityTool:
-    name = "my-capability"
-    description = "What this tool does"
-    input_schema = {...}  # JSON schema
-
-    async def execute(self, input_data: dict) -> dict:
-        """Execute the tool."""
-        # Implementation
-        return {"result": "..."}
-```
-
-### Step 4: Reference the Module in bundle.md
-
-```yaml
-tools:
-  - module: tool-my-capability
-    source: ./modules/tool-my-capability  # Relative path
-    config:
-      setting: value
-```
-
-The `./` prefix tells the resolver to look relative to the bundle location.
-
-### Step 5: Add Documentation
-
-Create documentation that can be @mentioned in instructions:
-
-```
-docs/
-├── USAGE.md
-├── SCHEMA.md
-└── EXAMPLES.md
-```
-
-Reference in bundle instructions:
-```markdown
-For the complete schema, see @my-capability:docs/SCHEMA.md
-```
-
-### Step 6: Add README and Standard Files
-
-Create a README.md for humans browsing the repository:
-- What the bundle provides
-- How to load/use it
-- Link to documentation
-
-Copy standard files: LICENSE, SECURITY.md, CODE_OF_CONDUCT.md, SUPPORT.md
 
 ---
 
@@ -258,6 +605,7 @@ includes:
   - bundle: foundation                    # Well-known bundle name
   - bundle: git+https://github.com/...    # Git URL
   - bundle: ./bundles/variant.yaml        # Local file
+  - bundle: my-bundle:behaviors/foo       # Behavior within same bundle
 ```
 
 **Merge rules**:
@@ -309,6 +657,18 @@ includes:
 
 ## Best Practices
 
+### Use the Thin Bundle Pattern
+
+When including foundation, don't redeclare what it provides. Your bundle.md should be minimal.
+
+### Create Behaviors for Reusability
+
+Package your agents + context in `behaviors/` so others can include just your capability.
+
+### Consolidate Instructions
+
+Put instructions in `context/instructions.md`, not inline in bundle.md.
+
 ### Keep Modules Local When Possible
 
 For bundle-specific tools, keep them in `modules/` within the bundle:
@@ -328,20 +688,41 @@ The `meta.description` is shown when listing agents. Include:
 - When to use it
 - Usage examples in the description string
 
-### Document with @mentions
-
-Keep documentation in `docs/` and reference via @mentions. This:
-- Avoids duplicating content in instructions
-- Keeps docs maintainable
-- Allows detailed reference material
-
-### Start Without includes:
-
-You don't need to include `foundation` if your bundle is self-contained. Add `includes:` only when you need capabilities from other bundles.
-
 ### No Root pyproject.toml
 
-Bundles are configuration, not Python packages. Don't add a `pyproject.toml` at the bundle root - it serves no purpose and adds confusion about what bundles are.
+Bundles are configuration, not Python packages. Don't add a `pyproject.toml` at the bundle root.
+
+---
+
+## Complete Example: amplifier-bundle-recipes
+
+See [amplifier-bundle-recipes](https://github.com/microsoft/amplifier-bundle-recipes) for the canonical example of the thin bundle + behavior pattern:
+
+```
+amplifier-bundle-recipes/
+├── bundle.md                 # THIN: 14 lines of YAML, just includes
+├── behaviors/
+│   └── recipes.yaml          # Behavior: tool + agents + context
+├── agents/
+│   ├── recipe-author.md      # Conversational recipe creation
+│   └── result-validator.md   # Pass/fail validation
+├── context/
+│   └── recipe-instructions.md  # Consolidated instructions
+├── modules/
+│   └── tool-recipes/         # Local tool implementation
+├── docs/                     # Comprehensive documentation
+├── examples/                 # Working examples
+├── templates/                # Starter templates
+├── README.md
+└── ...
+```
+
+**Key patterns demonstrated**:
+- **Thin bundle.md** - Only includes foundation + behavior
+- **Behavior pattern** - `behaviors/recipes.yaml` defines the capability
+- **Context de-duplication** - Instructions in `context/recipe-instructions.md`
+- **Local module** - `modules/tool-recipes/` with source reference
+- **No duplication** - Nothing from foundation is redeclared
 
 ---
 
@@ -365,42 +746,17 @@ Bundles are configuration, not Python packages. Don't add a `pyproject.toml` at 
 - Check namespace matches bundle name
 - Ensure path is relative to bundle root
 
----
+### Behavior not applying
 
-## Example: Complete Bundle
-
-See `amplifier-bundle-recipes` for a complete real-world example:
-
-```
-amplifier-bundle-recipes/
-├── bundle.md                 # Bundle definition
-├── agents/
-│   ├── recipe-author.md      # Conversational recipe creation
-│   └── result-validator.md   # Pass/fail validation
-├── modules/
-│   └── tool-recipes/         # Full tool implementation
-│       ├── pyproject.toml
-│       └── amplifier_module_tool_recipes/
-├── docs/                     # Comprehensive documentation
-├── examples/                 # Working recipe examples
-├── templates/                # Starter templates
-├── README.md
-├── LICENSE
-├── SECURITY.md
-├── CODE_OF_CONDUCT.md
-└── SUPPORT.md
-```
-
-Key features demonstrated:
-- Local module with `source: ./modules/tool-recipes`
-- Multiple agents with proper `meta:` frontmatter
-- @mentions for documentation in bundle instructions
-- No root pyproject.toml (bundles are configuration, not packages)
+- Verify behavior YAML syntax is correct
+- Check include path: `my-bundle:behaviors/name` (not `my-bundle:behaviors/name.yaml`)
+- Ensure behavior declares `agents:` and/or `context:` sections
 
 ---
 
 ## Reference
 
+- **[amplifier-bundle-recipes](https://github.com/microsoft/amplifier-bundle-recipes)** - Canonical example of thin bundle + behavior pattern
 - **[URI Formats](URI_FORMATS.md)** - Complete source URI documentation
 - **[Validation](VALIDATION.md)** - Bundle validation rules
 - **[API Reference](API_REFERENCE.md)** - Programmatic bundle loading
