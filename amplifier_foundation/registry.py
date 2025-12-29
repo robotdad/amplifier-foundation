@@ -284,38 +284,55 @@ class BundleRegistry:
             root_bundle_path: Path | None = None
             root_bundle: Bundle | None = None
 
-            # If loading from subdirectory, set up source_base_paths for root access
-            if resolved.is_subdirectory:
-                root_bundle_path = self._find_nearest_bundle_file(
-                    start=resolved.active_path.parent,
-                    stop=resolved.source_root,
-                )
-                if root_bundle_path:
-                    # Load root bundle to get its name for namespace registration
-                    # This allows @rootname:path references (e.g., @recipes:examples/)
-                    root_bundle = await self._load_from_path(root_bundle_path)
-                    if root_bundle.name:
-                        bundle.source_base_paths[root_bundle.name] = resolved.source_root
-                        logger.debug(
-                            f"Subdirectory bundle '{bundle.name}' registered root namespace "
-                            f"@{root_bundle.name}: -> {resolved.source_root}"
-                        )
-                    # Also register subdirectory bundle's own name if different
-                    if bundle.name and bundle.name != root_bundle.name:
-                        bundle.source_base_paths[bundle.name] = resolved.source_root
-                        logger.debug(
-                            f"Subdirectory bundle also registered own namespace "
-                            f"@{bundle.name}: -> {resolved.source_root}"
-                        )
+            # Detect sub-bundles by walking up to find a root bundle.md/yaml
+            # This works for:
+            # - git URIs with #subdirectory= fragments (resolved.is_subdirectory=True)
+            # - file:// URIs pointing to files within a bundle's directory structure
+            # - Any other case where a bundle file is nested within another bundle
+            #
+            # We try to find a root bundle by walking up from the parent directory.
+            # If the loaded bundle's path IS the root bundle, _find_nearest_bundle_file
+            # will find itself, so we check if the found root is different.
+            if local_path.is_file():
+                search_start = local_path.parent
+            else:
+                search_start = local_path
+
+            # Use source_root as stop boundary if available, otherwise use cache root
+            cache_root = Path.home() / ".amplifier" / "cache"
+            stop_boundary = resolved.source_root if resolved.source_root else cache_root
+
+            root_bundle_path = self._find_nearest_bundle_file(
+                start=search_start,
+                stop=stop_boundary,
+            )
+
+            if root_bundle_path and root_bundle_path != local_path:
+                # Found a root bundle that's different from our loaded bundle
+                root_bundle = await self._load_from_path(root_bundle_path)
+                if root_bundle.name:
+                    bundle.source_base_paths[root_bundle.name] = resolved.source_root
+                    logger.debug(
+                        f"Sub-bundle '{bundle.name}' registered root namespace "
+                        f"@{root_bundle.name}: -> {resolved.source_root}"
+                    )
+                # Also register subdirectory bundle's own name if different
+                if bundle.name and bundle.name != root_bundle.name:
+                    bundle.source_base_paths[bundle.name] = resolved.source_root
+                    logger.debug(
+                        f"Sub-bundle also registered own namespace "
+                        f"@{bundle.name}: -> {resolved.source_root}"
+                    )
 
             # Determine if this is a root bundle or sub-bundle
-            # Sub-bundles are loaded from subdirectories (behaviors/, providers/, etc.)
-            is_root_bundle = not resolved.is_subdirectory
+            # A bundle is a sub-bundle if we found a DIFFERENT root bundle above it
+            is_root_bundle = True
             root_bundle_name: str | None = None
 
-            if resolved.is_subdirectory and root_bundle_path:
-                # We already loaded root_bundle above when setting up source_base_paths
-                root_bundle_name = root_bundle.name if root_bundle else None
+            if root_bundle and root_bundle.name and root_bundle.name != bundle.name:
+                # Found a different root bundle - this is a sub-bundle
+                is_root_bundle = False
+                root_bundle_name = root_bundle.name
 
             # Register bundle for namespace resolution before processing includes.
             # This is needed even when auto_register=False because the bundle's
