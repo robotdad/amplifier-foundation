@@ -52,10 +52,12 @@ class BundleState:
     loaded_at: datetime | None = None
     checked_at: datetime | None = None
     local_path: str | None = None  # Stored as string for JSON serialization
+    includes: list[str] | None = None  # Bundles this bundle includes
+    included_by: list[str] | None = None  # Bundles that include this bundle
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict."""
-        return {
+        result = {
             "uri": self.uri,
             "name": self.name,
             "version": self.version,
@@ -63,6 +65,12 @@ class BundleState:
             "checked_at": self.checked_at.isoformat() if self.checked_at else None,
             "local_path": self.local_path,
         }
+        # Only include relationship fields if they have data
+        if self.includes:
+            result["includes"] = self.includes
+        if self.included_by:
+            result["included_by"] = self.included_by
+        return result
 
     @classmethod
     def from_dict(cls, name: str, data: dict[str, Any]) -> BundleState:
@@ -74,6 +82,8 @@ class BundleState:
             loaded_at=datetime.fromisoformat(data["loaded_at"]) if data.get("loaded_at") else None,
             checked_at=datetime.fromisoformat(data["checked_at"]) if data.get("checked_at") else None,
             local_path=data.get("local_path"),
+            includes=data.get("includes"),
+            included_by=data.get("included_by"),
         )
 
 
@@ -312,7 +322,7 @@ class BundleRegistry:
 
             # Load includes and compose
             if auto_include and bundle.includes:
-                bundle = await self._compose_includes(bundle)
+                bundle = await self._compose_includes(bundle, parent_name=bundle.name)
 
             # Store source URI for update checking (used by check_bundle_status)
             # Must be set AFTER composition since compose() returns a new Bundle
@@ -369,12 +379,19 @@ class BundleRegistry:
 
         return Bundle.from_dict(data, base_path=path.parent)
 
-    async def _compose_includes(self, bundle: Bundle) -> Bundle:
-        """Load and compose included bundles."""
+    async def _compose_includes(self, bundle: Bundle, parent_name: str | None = None) -> Bundle:
+        """Load and compose included bundles.
+
+        Args:
+            bundle: The bundle to compose includes for.
+            parent_name: Name of the parent bundle (for tracking relationships).
+        """
         if not bundle.includes:
             return bundle
 
         included_bundles: list[Bundle] = []
+        included_names: list[str] = []  # Track names for relationship recording
+
         for include in bundle.includes:
             include_source = self._parse_include(include)
             if include_source:
@@ -391,6 +408,11 @@ class BundleRegistry:
                         auto_include=True,
                     )
                     included_bundles.append(included)
+
+                    # Track the included bundle's name for relationship recording
+                    if included.name:
+                        included_names.append(included.name)
+
                 except BundleNotFoundError:
                     # Includes are opportunistic - but warn so users know
                     logger.warning(f"Include not found (skipping): {include_source}")
@@ -399,12 +421,48 @@ class BundleRegistry:
         if not included_bundles:
             return bundle
 
+        # Record include relationships in registry state
+        if parent_name and included_names:
+            self._record_include_relationships(parent_name, included_names)
+
         # Compose: includes first, then current bundle overrides
         result = included_bundles[0]
         for included in included_bundles[1:]:
             result = result.compose(included)
 
         return result.compose(bundle)
+
+    def _record_include_relationships(self, parent_name: str, child_names: list[str]) -> None:
+        """Record which bundles include which other bundles.
+
+        Updates both parent's 'includes' and children's 'included_by' fields.
+        Persists registry state after recording.
+
+        Args:
+            parent_name: Name of the parent bundle.
+            child_names: Names of bundles included by parent.
+        """
+        # Update parent's includes list
+        parent_state = self._registry.get(parent_name)
+        if parent_state:
+            if parent_state.includes is None:
+                parent_state.includes = []
+            for child_name in child_names:
+                if child_name not in parent_state.includes:
+                    parent_state.includes.append(child_name)
+
+        # Update each child's included_by list
+        for child_name in child_names:
+            child_state = self._registry.get(child_name)
+            if child_state:
+                if child_state.included_by is None:
+                    child_state.included_by = []
+                if parent_name not in child_state.included_by:
+                    child_state.included_by.append(parent_name)
+
+        # Persist the updated state
+        self.save()
+        logger.debug(f"Recorded include relationships: {parent_name} includes {child_names}")
 
     def _resolve_include_source(self, source: str) -> str | None:
         """Resolve include source to a loadable URI.
