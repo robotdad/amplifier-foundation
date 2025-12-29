@@ -54,6 +54,8 @@ class BundleState:
     local_path: str | None = None  # Stored as string for JSON serialization
     includes: list[str] | None = None  # Bundles this bundle includes
     included_by: list[str] | None = None  # Bundles that include this bundle
+    is_root: bool = True  # True if root bundle, False if sub-bundle (behavior, etc.)
+    root_name: str | None = None  # For sub-bundles, the name of the root bundle
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict."""
@@ -64,12 +66,15 @@ class BundleState:
             "loaded_at": self.loaded_at.isoformat() if self.loaded_at else None,
             "checked_at": self.checked_at.isoformat() if self.checked_at else None,
             "local_path": self.local_path,
+            "is_root": self.is_root,
         }
-        # Only include relationship fields if they have data
+        # Only include optional fields if they have data
         if self.includes:
             result["includes"] = self.includes
         if self.included_by:
             result["included_by"] = self.included_by
+        if self.root_name:
+            result["root_name"] = self.root_name
         return result
 
     @classmethod
@@ -84,6 +89,8 @@ class BundleState:
             local_path=data.get("local_path"),
             includes=data.get("includes"),
             included_by=data.get("included_by"),
+            is_root=data.get("is_root", True),  # Default to True for backwards compatibility
+            root_name=data.get("root_name"),
         )
 
 
@@ -273,6 +280,10 @@ class BundleRegistry:
             # Load bundle from path
             bundle = await self._load_from_path(local_path)
 
+            # Track root bundle info for sub-bundle detection
+            root_bundle_path: Path | None = None
+            root_bundle: Bundle | None = None
+
             # If loading from subdirectory, set up source_base_paths for root access
             if resolved.is_subdirectory:
                 root_bundle_path = self._find_nearest_bundle_file(
@@ -297,6 +308,15 @@ class BundleRegistry:
                             f"@{bundle.name}: -> {resolved.source_root}"
                         )
 
+            # Determine if this is a root bundle or sub-bundle
+            # Sub-bundles are loaded from subdirectories (behaviors/, providers/, etc.)
+            is_root_bundle = not resolved.is_subdirectory
+            root_bundle_name: str | None = None
+
+            if resolved.is_subdirectory and root_bundle_path:
+                # We already loaded root_bundle above when setting up source_base_paths
+                root_bundle_name = root_bundle.name if root_bundle else None
+
             # Register bundle for namespace resolution before processing includes.
             # This is needed even when auto_register=False because the bundle's
             # own includes may reference its namespace (self-referencing includes
@@ -308,8 +328,13 @@ class BundleRegistry:
                     version=bundle.version,
                     loaded_at=datetime.now(),
                     local_path=str(local_path),
+                    is_root=is_root_bundle,
+                    root_name=root_bundle_name,
                 )
-                logger.debug(f"Registered bundle for namespace resolution: {bundle.name}")
+                logger.debug(
+                    f"Registered bundle for namespace resolution: {bundle.name} "
+                    f"(is_root={is_root_bundle}, root_name={root_bundle_name})"
+                )
 
             # Update state for known bundle (pre-registered via well-known bundles, etc.)
             # Handle both: loaded by registered name OR loaded by URI but bundle.name matches registry
