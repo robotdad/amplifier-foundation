@@ -37,6 +37,7 @@ tools:
 # Reuse foundation's existing agents - no need for custom versions
 agents:
   include:
+    # High-level agents
     - foundation:explorer
     - foundation:bug-hunter
     - foundation:zen-architect
@@ -45,6 +46,11 @@ agents:
     - foundation:security-guardian
     - foundation:test-coverage
     - foundation:session-analyst
+    # Low-level specialized agents
+    - foundation:file-ops
+    - foundation:shell-exec
+    - foundation:git-ops
+    - foundation:web-research
 ---
 
 # Delegation-Only Coordinator
