@@ -34,15 +34,15 @@ tools:
   - module: tool-todo
     source: git+https://github.com/microsoft/amplifier-module-tool-todo@main
 
-# Agents bundled with this experiment
+# Agents bundled with this experiment (simple names to avoid delegation confusion)
 agents:
   include:
-    - foundation:experiments/delegation-only:file-ops
-    - foundation:experiments/delegation-only:code-intel
-    - foundation:experiments/delegation-only:shell-exec
-    - foundation:experiments/delegation-only:git-ops
-    - foundation:experiments/delegation-only:web-research
-    - foundation:experiments/delegation-only:explorer
+    - file-ops
+    - code-intel
+    - shell-exec
+    - git-ops
+    - web-research
+    - explorer
 ---
 
 # Delegation-Only Coordinator
