@@ -9,7 +9,7 @@ tools:
   - module: tool-search
     source: git+https://github.com/microsoft/amplifier-module-tool-search@main
   - module: tool-lsp
-    source: git+https://github.com/microsoft/amplifier-module-tool-lsp@main
+    source: git+https://github.com/microsoft/amplifier-bundle-lsp@main#subdirectory=modules/tool-lsp
 ---
 
 # Explorer Agent

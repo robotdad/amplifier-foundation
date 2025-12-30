@@ -5,7 +5,7 @@ meta:
 
 tools:
   - module: tool-lsp
-    source: git+https://github.com/microsoft/amplifier-module-tool-lsp@main
+    source: git+https://github.com/microsoft/amplifier-bundle-lsp@main#subdirectory=modules/tool-lsp
 ---
 
 # Code Intelligence Agent
