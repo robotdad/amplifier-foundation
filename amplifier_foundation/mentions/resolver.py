@@ -14,7 +14,7 @@ class BaseMentionResolver:
 
     Supports two patterns:
     - @bundle-name:context-name - From bundle's context namespace
-    - @path - Relative to base path
+    - @path - Relative to current working directory (CWD)
 
     Apps extend this class to add shortcuts like @user:, @project:.
     """
@@ -22,16 +22,17 @@ class BaseMentionResolver:
     def __init__(
         self,
         bundles: dict[str, Bundle] | None = None,
-        base_path: Path | None = None,
+        base_path: Path | None = None,  # Kept for API compatibility; not used for @path
     ) -> None:
         """Initialize resolver.
 
         Args:
             bundles: Dict mapping bundle names to Bundle instances.
-            base_path: Base path for relative @path mentions.
+            base_path: Unused (kept for API compatibility). Relative @path
+                       mentions always resolve against CWD.
         """
         self.bundles = bundles or {}
-        self.base_path = base_path or Path.cwd()
+        self.base_path = base_path or Path.cwd()  # Stored but not used for @path
 
     def resolve(self, mention: str) -> Path | None:
         """Resolve an @mention to a file path.
@@ -54,13 +55,14 @@ class BaseMentionResolver:
                 return bundle.resolve_context_path(name)
             return None
 
-        # Pattern 2: @path (relative to base)
-        path = self.base_path / mention_body
+        # Pattern 2: @path (relative to CWD for user-local files)
+        cwd = Path.cwd()
+        path = cwd / mention_body
         if path.exists():
             return path
 
         # Try with .md extension
-        path_md = self.base_path / f"{mention_body}.md"
+        path_md = cwd / f"{mention_body}.md"
         if path_md.exists():
             return path_md
 
