@@ -54,6 +54,9 @@ class Bundle:
     context: dict[str, Path] = field(default_factory=dict)
     instruction: str | None = None
 
+    # Spawn policy - controls what tools/config spawned agents receive
+    spawn: dict[str, Any] = field(default_factory=dict)
+
     # Internal
     base_path: Path | None = None
     source_base_paths: dict[str, Path] = field(default_factory=dict)  # Track base_path for each source namespace
@@ -106,6 +109,7 @@ class Bundle:
             instruction=self.instruction,
             base_path=self.base_path,
             source_base_paths=initial_base_paths,
+            spawn=dict(self.spawn) if self.spawn else {},
         )
 
         for other in others:
@@ -159,6 +163,10 @@ class Bundle:
             if other.base_path:
                 result.base_path = other.base_path
 
+            # Spawn policy: deep merge (later overrides)
+            if other.spawn:
+                result.spawn = deep_merge(result.spawn, other.spawn)
+
         return result
 
     def to_mount_plan(self) -> dict[str, Any]:
@@ -184,6 +192,10 @@ class Bundle:
         # Agents go in mount plan for sub-session delegation
         if self.agents:
             mount_plan["agents"] = dict(self.agents)
+
+        # Spawn policy for controlling agent tool inheritance
+        if self.spawn:
+            mount_plan["spawn"] = dict(self.spawn)
 
         return mount_plan
 
@@ -385,6 +397,7 @@ class Bundle:
             _pending_context=pending_context,
             instruction=None,  # Set separately from markdown body
             base_path=base_path,
+            spawn=data.get("spawn", {}),
         )
 
 
