@@ -114,11 +114,56 @@ You may also use these files to store important information about your role, beh
 - If neither of those files exist, but an `.amplifier/` directory exists, you should create an AGENTS.md file in that directory.
 - If none of those exist, you should use the `~/.amplifier/AGENTS.md` file or create it if it does not exist.
 
-## ⚠️ IMPORTANT: `@Mention` Support
+## ⚠️ IMPORTANT: Bundle Composition and Context Injection
 
-Bundle instructions support `@mention` paths for referencing context files.
+Understanding how your instructions were assembled helps you make good decisions about where content belongs.
 
-**`@Mention` Patterns Supported:**
+### How Bundle Composition Works
+
+When bundle B includes bundle A:
+- **YAML sections merge** - tools, agents, hooks, providers, session config are combined
+- **Markdown instructions do NOT merge** - each bundle writes its own instructions from scratch
+
+This means bundles that include foundation get its tools/agents but must write their own system prompt. They typically reference shared context via `@mentions`.
+
+### Two Context Injection Mechanisms
+
+**1. `@mentions` in markdown instructions:**
+```markdown
+@foundation:context/IMPLEMENTATION_PHILOSOPHY.md
+```
+Files are loaded and prepended as context blocks wherever the @mention appears.
+
+**2. `context:` section in behavior YAML:**
+```yaml
+# behaviors/my-capability.yaml
+context:
+  include:
+    - my-bundle:context/instructions.md
+```
+Files listed here are force-added to any bundle that includes this behavior.
+
+Both mechanisms result in content appearing in your system instructions, but:
+- @mentions = explicit in the markdown, visible where referenced
+- context: section = implicit via includes, may not be obvious why you have it
+
+### What Belongs Where
+
+| Content Type | Location | Why |
+|--------------|----------|-----|
+| Universal agent behavior (tone, security, tool selection) | `context/shared/common-agent-base.md` | All agents need this |
+| Root session behavior (todo tracking, exploration patterns) | `context/shared/common-system-base.md` | Only root coordinators need this |
+| Bundle-specific orchestration (your agents, your workflows) | `bundle.md` instructions | Unique to this bundle's mix |
+| Capability-specific guidance | `context/` files referenced by behaviors | Reusable by other bundles |
+
+### Be Judicious with @mentions
+
+Every @mention adds tokens to context. Before adding one:
+- **Is this always needed?** Or only sometimes → load on demand instead
+- **Is this the right scope?** Should sub-agents also see it?
+- **Is this duplicating?** Check if it's already included via a behavior
+
+### `@Mention` Patterns Supported
 
 - `@bundle-name:path` - Bundle resources (e.g., `@foundation:context/IMPLEMENTATION_PHILOSOPHY.md`)
 - `@relative/path` - Relative path from current working directory
@@ -132,12 +177,6 @@ Bundle instructions support `@mention` paths for referencing context files.
 # Reference a file relative to current directory
 @docs/README.md
 ```
-
-**How @mentions work:**
-
-1. When a bundle instruction contains `@mentions`, the referenced files are loaded
-2. File contents are prepended to the instruction as context blocks
-3. The LLM sees both the file contents and the original instruction with @mentions
 
 ## ⚠️ CRITICAL: Your Responsibility to Keep This File Current
 
