@@ -107,7 +107,7 @@ This repo also contains reference bundle content for common configurations:
 | Path | Content |
 |------|---------|
 | `bundle.md` | **Main foundation bundle** - provider-agnostic base with streaming, tools, behaviors |
-| `providers/` | Provider configurations (anthropic-sonnet, anthropic-opus, openai-gpt, openai-gpt-5, openai-gpt-codex) |
+| `providers/` | Provider configurations (anthropic, openai, azure-openai, gemini, ollama) |
 | `agents/` | Reusable agent definitions |
 | `behaviors/` | Behavioral configurations (logging, redaction, status, etc.) |
 | `context/` | Shared context files |
