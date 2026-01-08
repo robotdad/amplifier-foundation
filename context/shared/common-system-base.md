@@ -192,6 +192,98 @@ When working with session files:
 
 For detailed patterns, delegate to `foundation:session-analyst` agent or see `foundation:context/agents/session-storage-knowledge.md`.
 
+---
+
+# Incremental Validation Protocol
+
+**CRITICAL**: Validation is continuous, not terminal. Issues found early are trivial to fix; issues found at session end cascade into complex rework.
+
+## Pre-Commit Validation Gate
+
+Before EVERY commit, complete this validation chain:
+
+1. **Code Intelligence Check** (delegate to `lsp-python:python-code-intel`):
+   - LSP diagnostics on all modified files
+   - Dead code and unused import detection
+   - Broken reference identification
+   - Type consistency verification
+
+2. **Architecture Review** (for non-trivial changes, delegate to `foundation:zen-architect` in REVIEW mode):
+   - Philosophy compliance check
+   - Stale documentation detection
+   - API consistency validation
+
+3. **Test Verification**:
+   - Run tests for affected modules: `pytest tests/test_<module>.py -x`
+   - Verify no new failures introduced
+
+## Validation Cadence
+
+| Work Type | Validation Frequency |
+|-----------|---------------------|
+| Single file fix | Before commit |
+| Multi-file refactor | Every 3-5 files modified |
+| API/signature change | Immediately after change |
+| Large feature | After each logical component |
+
+## The 3-File Rule
+
+After modifying 3 files, PAUSE and:
+1. Run `lsp-python:python-code-intel` on changed files
+2. Run affected tests
+3. Review changes: `git diff`
+4. Fix any issues BEFORE continuing
+
+**Why**: Session analysis showed 7 iteration cycles that would have been 2 with incremental validation.
+
+## Expert Consultation Triggers
+
+### MUST Consult Before Implementation
+
+| Scenario | Consult | Why |
+|----------|---------|-----|
+| Implementing Amplifier protocol (Tool, Provider, etc.) | `foundation:foundation-expert` | Protocol contracts have exact requirements |
+| New repository setup | `foundation:foundation-expert` | Microsoft compliance, naming conventions |
+| Multi-repo changes | `amplifier:amplifier-expert` | Cross-repo dependency awareness |
+| Kernel-level changes | `core:core-expert` | Stability implications |
+
+### The 3-Iteration Rule
+
+If you hit blockers 3 times on the same issue:
+1. STOP trying to solve it directly
+2. DELEGATE to the domain expert
+3. The expert has @-mentioned context you lack
+
+**Evidence**: 50+ turns of trial-and-error vs 2 turns after expert consultation.
+
+## Test Synchronization During Refactors
+
+### The Golden Rule
+**Tests are code too.** When you change an API, the test file is the FIRST file to update, not the last.
+
+### Refactoring Workflow
+1. **Identify test files** for modules being changed
+2. **Update tests BEFORE or WITH implementation changes**
+3. **Run tests after EVERY significant change**, not just at the end
+
+### Test Breakage Response
+If tests fail after your changes:
+1. **STOP** - Do not continue implementing
+2. **FIX** - Update tests to match new implementation
+3. **VERIFY** - Run tests again
+4. **THEN** continue with next change
+
+Never accumulate broken tests - they compound confusion.
+
+## Red Flags - DO NOT COMMIT IF:
+- Any test is failing
+- LSP shows broken references or type errors
+- Unused imports or dead code detected
+- Tests haven't been updated to match API changes
+- "I'll fix it in the next commit" thoughts occurring
+
+---
+
 @foundation:context/shared/common-agent-base.md
 
 @foundation:context/KERNEL_PHILOSOPHY.md
