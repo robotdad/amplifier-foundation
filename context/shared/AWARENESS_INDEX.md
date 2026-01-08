@@ -150,9 +150,12 @@ Delegate to `foundation:foundation-expert` for guidance on which example applies
 |------|-------------------|-----|
 | Code investigation | `python-code-intel` + `explorer` + `zen-architect` | LSP traces actual code; explorer finds related files; architect assesses design |
 | Bug debugging | `bug-hunter` + `python-code-intel` | Hypothesis methodology + precise call tracing |
-| Implementation | `zen-architect` → `modular-builder` → `zen-architect` | Design → implement → review |
+| Implementation | `zen-architect` → `modular-builder` → `python-code-intel` → `zen-architect` | Design → implement → **validate** → review |
+| Refactoring | `python-code-intel` (every 3 files) + `zen-architect` (at end) | Incremental validation prevents cascading fixes |
 
 **Key insight**: Different agents have different tools (LSP vs grep), perspectives (deterministic vs exploratory), and context. TOGETHER they reveal more than any single agent.
+
+**Validation insight**: Run `python-code-intel` incrementally during implementation, not just at the end. Issues found early = trivial fixes; issues found late = cascading rework.
 
 ---
 
