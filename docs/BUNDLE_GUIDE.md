@@ -311,9 +311,13 @@ my-bundle/
 
 **Note**: No `pyproject.toml` at the root. Only modules inside `modules/` need their own `pyproject.toml`.
 
-### Hybrid Bundle (Python CLI + Bundle Assets)
+### Hybrid Bundle (Standalone CLI + Bundle Assets) - Rare
 
-Some bundles provide BOTH a Python CLI tool AND bundle configuration (agents, context, etc.). These require careful packaging to avoid conflicts.
+> **When do you need this?** Only when your bundle provides a **standalone CLI tool** (installed via `uv tool install`) that **requires bundle assets at runtime** to function. Examples: `amplifier-bundle-shadow` provides the `amplifier-shadow` CLI which needs container configs.
+>
+> **Most bundles don't need this.** If your bundle just provides agents, tools, and context for use within Amplifier sessions, use the standard pure bundle pattern above. Put tool functionality in `modules/tool-*/` subdirectories.
+
+Some bundles provide BOTH a standalone Python CLI tool AND bundle configuration (agents, context, etc.). These require careful packaging to avoid conflicts.
 
 ```
 my-hybrid-bundle/
