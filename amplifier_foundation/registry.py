@@ -56,6 +56,7 @@ class BundleState:
     included_by: list[str] | None = None  # Bundles that include this bundle
     is_root: bool = True  # True if root bundle, False if sub-bundle (behavior, etc.)
     root_name: str | None = None  # For sub-bundles, the name of the root bundle
+    explicitly_requested: bool = False  # True if user explicitly requested (bundle use/add)
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict."""
@@ -67,6 +68,7 @@ class BundleState:
             "checked_at": self.checked_at.isoformat() if self.checked_at else None,
             "local_path": self.local_path,
             "is_root": self.is_root,
+            "explicitly_requested": self.explicitly_requested,
         }
         # Only include optional fields if they have data
         if self.includes:
@@ -91,6 +93,7 @@ class BundleState:
             included_by=data.get("included_by"),
             is_root=data.get("is_root", True),  # Default to True for backwards compatibility
             root_name=data.get("root_name"),
+            explicitly_requested=data.get("explicitly_requested", False),  # Default False for safety
         )
 
 
