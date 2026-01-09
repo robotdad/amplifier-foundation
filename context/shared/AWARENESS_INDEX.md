@@ -49,14 +49,48 @@ Understanding what module types exist enables effective discussion and delegatio
 |------|---------|----------|
 | **Provider** | LLM backends | `complete(request) → response` |
 | **Tool** | Agent capabilities | `execute(input) → result` |
-| **Orchestrator** | Execution strategy | `execute(prompt, context, ...) → str` |
+| **Orchestrator** | The main engine driving sessions | `execute(prompt, context, providers, tools, hooks) → str` |
 | **Hook** | Lifecycle observer | `__call__(event, data) → HookResult` |
 | **Context** | Memory management | `add/get/set_messages, clear` |
-| **Agent** | Config overlay | Partial mount plan for sub-sessions |
 
-**Session Model**: Sessions carry a Coordinator with mounted modules. Sub-sessions (agents) fork with configuration overlays.
+**Note**: There are exactly 5 kernel module types. "Agent" is NOT a module type - see below.
 
-**Event System**: Canonical events (`session:*`, `turn:*`, `tool:*`, `provider:*`) flow through hooks. Hooks can observe, enrich, modify, or cancel.
+### Orchestrator: The Main Engine
+
+The orchestrator is **THE control surface** for agent behavior, not just "execution strategy":
+- Controls the entire LLM → tool → response loop
+- Decides when to call providers, how to process tool calls, when to emit events
+- Swapping orchestrators can **radically change** how an agent behaves
+- Examples: agentic-loop (default), streaming, event-driven, observer-pattern
+
+### Agents (NOT a Module Type)
+
+**Agents are bundles**, not kernel modules. When you use the `task` tool:
+1. The task tool looks up agent config from `coordinator.config["agents"]`
+2. It calls the `session.spawn` capability (registered by the app layer)
+3. A new `AmplifierSession` is created with merged config and `parent_id` linking
+4. The child session runs its own orchestrator loop and returns a result
+
+This is a **foundation-layer pattern**, not a kernel concept. The kernel provides the session forking mechanism; the "agent" abstraction is built on top.
+
+**Session Model**: Sessions carry a Coordinator with mounted modules. Sub-sessions fork with configuration overlays via app-layer spawn capabilities.
+
+**Event System**: Canonical events (`session:*`, `prompt:*`, `tool:*`, `provider:*`, `content_block:*`, `context:*`, `approval:*`) flow through hooks. Hooks can observe, enrich, modify, or cancel.
+
+### Tool vs Hook: The Triggering Difference
+
+| | **Tools** | **Hooks** |
+|--|-----------|-----------|
+| **Triggered by** | LLM decides to call | Code (lifecycle events) |
+| **Control** | LLM-driven | Full programmatic control |
+| **Can use models?** | Only if tool code does internally | Only if hook code does internally |
+
+**Tools**: LLM sees tool definitions, decides to call them, orchestrator executes.
+**Hooks**: Code registers for events, runs when events fire. No LLM decision involved.
+
+### Behavior Bundles (Convention, Not Code)
+
+"Behavior bundle" is a **naming convention**, not a kernel concept. There's no special code for "behaviors" - they're just smaller, focused bundles in `behaviors/` directories designed to be composed into larger bundles.
 
 ---
 
