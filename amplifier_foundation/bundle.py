@@ -226,6 +226,20 @@ class Bundle:
         # like ./modules/foo resolve relative to the bundle, not cwd
         activator = ModuleActivator(install_deps=install_deps, base_path=self.base_path)
 
+        # CRITICAL: Install bundle packages BEFORE activating modules
+        # Modules may import from their parent bundle's package (e.g., tool-shadow
+        # imports from amplifier_bundle_shadow). These packages must be installed
+        # before modules can be activated.
+        if install_deps:
+            # Install this bundle's package (if it has pyproject.toml)
+            if self.base_path:
+                await activator.activate_bundle_package(self.base_path)
+
+            # Install packages from all included bundles (from source_base_paths)
+            for namespace, bundle_path in self.source_base_paths.items():
+                if bundle_path and bundle_path != self.base_path:
+                    await activator.activate_bundle_package(bundle_path)
+
         # Collect all modules that need activation
         modules_to_activate = []
 
@@ -723,6 +737,7 @@ class PreparedBundle:
         compose: bool = True,
         parent_session: Any = None,
         session_id: str | None = None,
+        orchestrator_config: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Spawn a sub-session with a child bundle.
 
@@ -743,6 +758,8 @@ class PreparedBundle:
             compose: Whether to compose child with parent bundle (default True).
             parent_session: Parent session for lineage tracking and UX inheritance.
             session_id: Optional session ID for resuming existing session.
+            orchestrator_config: Optional orchestrator config to override/merge into
+                the spawned session's orchestrator settings (e.g., min_delay_between_calls_ms).
 
         Returns:
             Dict with "output" (response) and "session_id".
@@ -776,6 +793,16 @@ class PreparedBundle:
 
         # Get mount plan and create session
         child_mount_plan = effective_bundle.to_mount_plan()
+
+        # Merge orchestrator config if provided (recipe-level override)
+        if orchestrator_config:
+            # Ensure orchestrator section exists
+            if "orchestrator" not in child_mount_plan:
+                child_mount_plan["orchestrator"] = {}
+            if "config" not in child_mount_plan["orchestrator"]:
+                child_mount_plan["orchestrator"]["config"] = {}
+            # Merge recipe config into mount plan (recipe takes precedence)
+            child_mount_plan["orchestrator"]["config"].update(orchestrator_config)
 
         from amplifier_core import AmplifierSession
 

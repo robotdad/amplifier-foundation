@@ -311,6 +311,65 @@ my-bundle/
 
 **Note**: No `pyproject.toml` at the root. Only modules inside `modules/` need their own `pyproject.toml`.
 
+### Hybrid Bundle (Standalone CLI + Bundle Assets) - Rare
+
+> **When do you need this?** Only when your bundle provides a **standalone CLI tool** (installed via `uv tool install`) that **requires bundle assets at runtime** to function. Examples: `amplifier-bundle-shadow` provides the `amplifier-shadow` CLI which needs container configs.
+>
+> **Most bundles don't need this.** If your bundle just provides agents, tools, and context for use within Amplifier sessions, use the standard pure bundle pattern above. Put tool functionality in `modules/tool-*/` subdirectories.
+
+Some bundles provide BOTH a standalone Python CLI tool AND bundle configuration (agents, context, etc.). These require careful packaging to avoid conflicts.
+
+```
+my-hybrid-bundle/
+├── pyproject.toml            # Python package config
+├── src/my_package/           # Python code
+│   ├── __init__.py
+│   ├── cli.py
+│   └── _bundle/              # Bundle assets INSIDE package
+│       ├── bundle.yaml
+│       ├── agents/
+│       └── context/
+├── modules/                  # Tool modules (separate packages)
+│   └── tool-my-tool/
+├── bundle.md                 # Root entry point
+└── README.md
+```
+
+**Key pattern**: Bundle assets go in a `_bundle/` subdirectory INSIDE the Python package, not at the package root.
+
+**Why?** When using hatch's `force-include` to put non-Python files in a wheel, the target path must NOT shadow the Python package namespace. See [Packaging Anti-Patterns](#-force-include-shadowing-python-namespace) below.
+
+**pyproject.toml for hybrid bundles:**
+
+```toml
+[project]
+name = "my-hybrid-bundle"
+version = "0.1.0"
+dependencies = [...]
+
+[project.scripts]
+my-cli = "my_package.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/my_package"]
+
+[tool.hatch.build.targets.wheel.force-include]
+# Assets go INSIDE package, in _bundle/ subdirectory
+"bundle.yaml" = "my_package/_bundle/bundle.yaml"
+"agents" = "my_package/_bundle/agents"
+"context" = "my_package/_bundle/context"
+```
+
+**Testing hybrid packages**: Always test with a built wheel, not just editable installs:
+
+```bash
+uv build --wheel
+uv pip install dist/*.whl --force-reinstall
+python -c "from my_package import SomeClass"  # Verify imports work
+```
+
+Editable installs use source directories and may mask packaging bugs that only appear in built wheels.
+
 ---
 
 ## Creating a Bundle Step-by-Step
@@ -508,6 +567,145 @@ agents:
 
 **Fix**: If you're just adding agents + maybe a tool, use a behavior YAML only.
 
+### ❌ Using @ Prefix in YAML
+
+```yaml
+# DON'T DO THIS - @ prefix is for markdown only
+context:
+  include:
+    - "@my-bundle:context/instructions.md"   # ❌ @ doesn't belong here
+
+agents:
+  include:
+    - "@my-bundle:my-agent"                  # ❌ @ doesn't belong here
+```
+
+```yaml
+# DO THIS - bare namespace:path in YAML
+context:
+  include:
+    - my-bundle:context/instructions.md      # ✅ No @ in YAML
+
+agents:
+  include:
+    - my-bundle:my-agent                     # ✅ No @ in YAML
+```
+
+**Why it's wrong**: The `@` prefix is markdown syntax for eager file loading. YAML sections use bare `namespace:path` references. Using `@` in YAML causes **silent failure** - the path won't resolve and content won't load, with no error message.
+
+### ❌ Using Repository Name as Namespace
+
+```yaml
+# If loading: git+https://github.com/microsoft/amplifier-bundle-recipes@main
+# And bundle.name in that repo is: "recipes"
+
+# DON'T DO THIS
+agents:
+  include:
+    - amplifier-bundle-recipes:recipe-author   # ❌ Repo name
+
+# DO THIS
+agents:
+  include:
+    - recipes:recipe-author                    # ✅ bundle.name value
+```
+
+**Why it's wrong**: The namespace is ALWAYS `bundle.name` from the YAML frontmatter, regardless of the git URL, repository name, or file path.
+
+### ❌ Including Subdirectory in Paths
+
+```yaml
+# If loading: git+https://...@main#subdirectory=bundles/foo
+# And bundle.name is: "foo"
+
+# DON'T DO THIS
+context:
+  include:
+    - foo:bundles/foo/context/instructions.md   # ❌ Redundant path
+
+# DO THIS
+context:
+  include:
+    - foo:context/instructions.md               # ✅ Relative to bundle location
+```
+
+**Why it's wrong**: When loaded via `#subdirectory=X`, the bundle root IS `X/`. Paths are relative to that root, so including the subdirectory in the path duplicates it.
+
+### ❌ Using context.include in bundle.md Instead of @mentions
+
+```markdown
+<!-- DON'T DO THIS in bundle.md -->
+---
+bundle:
+  name: my-bundle
+context:                              # ❌ This is for behavior YAML files
+  include:
+    - my-bundle:context/instructions.md
+---
+
+# Instructions here
+```
+
+```markdown
+<!-- DO THIS in bundle.md -->
+---
+bundle:
+  name: my-bundle
+---
+
+# Instructions
+
+@my-bundle:context/instructions.md    # ✅ Use @mention in markdown body
+```
+
+**Why it's wrong**: The `context.include` YAML section is the **behavior pattern** - it's meant for `behaviors/*.yaml` files that programmatically inject context into bundles that include them. Main `bundle.md` files should use `@mentions` directly in the markdown body.
+
+### ❌ force-include Shadowing Python Namespace
+
+```toml
+# DON'T DO THIS - shadows the Python package!
+[tool.hatch.build.targets.wheel]
+packages = ["src/my_package"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"agents" = "my_package/agents"        # ❌ Creates my_package/ with no __init__.py!
+"context" = "my_package/context"      # ❌ Shadows the actual Python package
+```
+
+```toml
+# DO THIS - use _bundle/ subdirectory
+[tool.hatch.build.targets.wheel.force-include]
+"agents" = "my_package/_bundle/agents"      # ✅ Inside package, won't shadow
+"context" = "my_package/_bundle/context"    # ✅ Python imports still work
+```
+
+**Why it's wrong**: hatch's `force-include` creates directories in the wheel. If you target `my_package/agents`, it creates a `my_package/` directory with just `agents/` inside (no `__init__.py`, no Python code). Python finds this directory first and treats it as a namespace package, **shadowing your actual Python package**. Result: `from my_package import X` fails with `ImportError`.
+
+**The fix**: Put non-Python assets in a subdirectory like `_bundle/` or `data/` inside the package namespace.
+
+**Critical**: This bug only appears in built wheels, not editable installs. Always test with `uv build && uv pip install dist/*.whl`.
+
+### ❌ Declaring amplifier-core as Runtime Dependency
+
+```toml
+# DON'T DO THIS in modules/tool-*/pyproject.toml
+[project]
+dependencies = [
+    "amplifier-core>=1.0.0",           # ❌ Not on PyPI, will fail
+    "amplifier-bundle-foo>=0.1.0",     # ❌ Not on PyPI, will fail
+]
+```
+
+```toml
+# DO THIS - no runtime dependencies for tool modules
+[project]
+dependencies = []   # ✅ amplifier-core is a peer dependency
+```
+
+**Why it's wrong**: Tool modules run inside the host application's process (amplifier-app-cli), which already has `amplifier-core` loaded. These packages aren't on PyPI, so declaring them as dependencies causes installation failures.
+
+**The pattern**: `amplifier-core` and bundle packages are **peer dependencies** - they're provided by the runtime environment, not installed as dependencies.
+
 ---
 
 ## Decision Framework
@@ -677,6 +875,51 @@ Foundation → Your bundle → App settings → Session overrides
                           tool configs)     permissions)
 ```
 
+### Policy Behaviors
+
+Some behaviors are **app-level policies** that should:
+- Only apply to root/interactive sessions (not sub-agents or recipe steps)
+- Be added by the app, not baked into bundles
+- Be configurable per-app context
+
+**Examples of policy behaviors:**
+- Notifications (don't notify for every sub-agent)
+- Cost tracking alerts
+- Session duration limits
+
+**Pattern for bundle authors:**
+If your behavior should be a policy (root-only, app-controlled):
+1. **Don't include it in your bundle.md** - provide it as a separate behavior
+2. **Document it as a policy behavior** - so apps know to compose it
+3. **Check `parent_id` in hooks** - skip sub-sessions by default
+
+```python
+# In your hook
+async def handle_event(self, event: str, data: dict) -> HookResult:
+    # Policy behavior: skip sub-sessions
+    if data.get("parent_id"):
+        return HookResult(action="continue")
+    # ... root session logic
+```
+
+**Pattern for app developers:**
+Configure policy behaviors in `settings.yaml`:
+
+```yaml
+config:
+  notifications:
+    desktop:
+      enabled: true
+    push:
+      enabled: true
+      service: ntfy
+      topic: "my-topic"
+```
+
+The app composes these behaviors onto bundles at runtime, only for root sessions.
+
+For detailed guidance, see [POLICY_BEHAVIORS.md](POLICY_BEHAVIORS.md).
+
 ---
 
 ## Using @mentions for Context
@@ -699,6 +942,19 @@ For API details, see @my-bundle:docs/API.md
 **Format**: `@namespace:path/to/file.md`
 
 The namespace is the bundle name. Paths are relative to the bundle root.
+
+### Syntax Quick Reference
+
+There are two different syntaxes for referencing files, and they are **NOT interchangeable**:
+
+| Location | Syntax | Example |
+|----------|--------|---------|
+| **Markdown body** (bundle.md, agents/*.md) | `@namespace:path` | `@my-bundle:context/guide.md` |
+| **YAML sections** (context.include, agents.include) | `namespace:path` (NO @) | `my-bundle:context/guide.md` |
+
+The `@` prefix is **only** for markdown text that gets processed during instruction loading. YAML sections use bare `namespace:path` references.
+
+See [Anti-Patterns to Avoid](#anti-patterns-to-avoid) for common syntax mistakes.
 
 ---
 
