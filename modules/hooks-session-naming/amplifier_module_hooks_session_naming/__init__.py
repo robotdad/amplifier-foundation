@@ -386,19 +386,12 @@ class SessionNamingHook:
     async def _call_provider(self, prompt: str) -> str | None:
         """Call the LLM provider to generate name/description."""
         try:
-            # Get the priority provider from coordinator
+            # Get the priority provider from coordinator using standard API
             provider = None
-
-            # Try mount_points first
-            if hasattr(self.coordinator, "mount_points"):
-                providers = self.coordinator.mount_points.get("providers", {})
-                if providers:
-                    # Get first/priority provider
-                    provider = next(iter(providers.values()), None)
-
-            # Try get_provider method
-            if not provider and hasattr(self.coordinator, "get_provider"):
-                provider = self.coordinator.get_provider()
+            providers = self.coordinator.get("providers")
+            if providers:
+                # Get first/priority provider
+                provider = next(iter(providers.values()), None)
 
             if not provider:
                 logger.warning("No provider available for session naming")
