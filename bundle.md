@@ -53,13 +53,6 @@ session:
       compact_threshold: 0.8
       auto_compact: true
 
-hooks:
-  - module: hooks-session-naming
-    source: foundation:modules/hooks-session-naming
-    config:
-      initial_trigger_turn: 2
-      update_interval_turns: 5
-
 tools:
   - module: tool-filesystem
     source: git+https://github.com/microsoft/amplifier-module-tool-filesystem@main
