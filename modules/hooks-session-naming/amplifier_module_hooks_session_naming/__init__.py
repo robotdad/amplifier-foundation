@@ -137,6 +137,30 @@ class SessionNamingHook:
         # Always return immediately - never block
         return HookResult(action="continue")
 
+    async def on_session_end(self, event: str, data: dict[str, Any]) -> HookResult:
+        """Handle session end - wait for any pending naming tasks to complete."""
+        session_id = data.get("session_id")
+        if not session_id:
+            return HookResult(action="continue")
+
+        # Wait for any pending naming task for this session
+        if session_id in self._pending_tasks:
+            task = self._pending_tasks.pop(session_id)
+            if not task.done():
+                try:
+                    # Wait for the task with a timeout (don't block forever)
+                    await asyncio.wait_for(task, timeout=30.0)
+                    logger.debug(f"Naming task completed for session {session_id[:8]}")
+                except asyncio.TimeoutError:
+                    logger.warning(f"Naming task timed out for session {session_id[:8]}")
+                    task.cancel()
+                except asyncio.CancelledError:
+                    logger.debug(f"Naming task was cancelled for session {session_id[:8]}")
+                except Exception as e:
+                    logger.error(f"Error waiting for naming task: {e}")
+
+        return HookResult(action="continue")
+
     def _get_session_dir(self, session_id: str) -> Path | None:
         """Get session directory path."""
         # Try to get from coordinator's session info
@@ -454,6 +478,14 @@ async def mount(coordinator: Any, config: dict[str, Any] | None = None) -> dict[
         hook.on_orchestrator_complete,
         priority=100,
         name="session-naming"
+    )
+
+    # Register for session end to wait for pending naming tasks
+    coordinator.hooks.register(
+        "session:end",
+        hook.on_session_end,
+        priority=0,  # Run early to ensure we wait before other cleanup
+        name="session-naming-cleanup"
     )
 
     return {
