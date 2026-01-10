@@ -54,12 +54,14 @@ class Bundle:
     context: dict[str, Path] = field(default_factory=dict)
     instruction: str | None = None
 
-
-
     # Internal
     base_path: Path | None = None
-    source_base_paths: dict[str, Path] = field(default_factory=dict)  # Track base_path for each source namespace
-    _pending_context: dict[str, str] = field(default_factory=dict)  # Context refs needing namespace resolution
+    source_base_paths: dict[str, Path] = field(
+        default_factory=dict
+    )  # Track base_path for each source namespace
+    _pending_context: dict[str, str] = field(
+        default_factory=dict
+    )  # Context refs needing namespace resolution
 
     def compose(self, *others: Bundle) -> Bundle:
         """Compose this bundle with others (later overrides earlier).
@@ -77,7 +79,9 @@ class Bundle:
             New Bundle with merged configuration.
         """
         # Initialize source_base_paths: copy self's or create from self's name/base_path
-        initial_base_paths = dict(self.source_base_paths) if self.source_base_paths else {}
+        initial_base_paths = (
+            dict(self.source_base_paths) if self.source_base_paths else {}
+        )
         if self.name and self.base_path and self.name not in initial_base_paths:
             initial_base_paths[self.name] = self.base_path
 
@@ -91,7 +95,9 @@ class Bundle:
             initial_context[prefixed_key] = path
 
         # Copy pending context (already has namespace prefixes from _parse_context)
-        initial_pending_context: dict[str, str] = dict(self._pending_context) if self._pending_context else {}
+        initial_pending_context: dict[str, str] = (
+            dict(self._pending_context) if self._pending_context else {}
+        )
 
         result = Bundle(
             name=self.name,
@@ -108,7 +114,6 @@ class Bundle:
             instruction=self.instruction,
             base_path=self.base_path,
             source_base_paths=initial_base_paths,
-
         )
 
         for other in others:
@@ -120,7 +125,11 @@ class Bundle:
                         result.source_base_paths[ns] = path
 
             # Also track other's own namespace as fallback (if not already set via source_base_paths)
-            if other.name and other.base_path and other.name not in result.source_base_paths:
+            if (
+                other.name
+                and other.base_path
+                and other.name not in result.source_base_paths
+            ):
                 result.source_base_paths[other.name] = other.base_path
 
             # Metadata: later wins
@@ -266,7 +275,15 @@ class Bundle:
         # Create resolver from activated paths
         resolver = BundleModuleResolver(module_paths)
 
-        return PreparedBundle(mount_plan=mount_plan, resolver=resolver, bundle=self)
+        # Get bundle package paths for inheritance by child sessions
+        bundle_package_paths = activator.bundle_package_paths
+
+        return PreparedBundle(
+            mount_plan=mount_plan,
+            resolver=resolver,
+            bundle=self,
+            bundle_package_paths=bundle_package_paths,
+        )
 
     def resolve_context_path(self, name: str) -> Path | None:
         """Resolve context file by name.
@@ -311,7 +328,9 @@ class Bundle:
 
             # First, try source_base_paths for included bundles
             if namespace in self.source_base_paths:
-                agent_path = self.source_base_paths[namespace] / "agents" / f"{simple_name}.md"
+                agent_path = (
+                    self.source_base_paths[namespace] / "agents" / f"{simple_name}.md"
+                )
                 if agent_path.exists():
                     return agent_path
 
@@ -386,7 +405,9 @@ class Bundle:
         bundle_meta = data.get("bundle", {})
 
         # Parse context - returns (resolved, pending) tuple
-        resolved_context, pending_context = _parse_context(data.get("context", {}), base_path)
+        resolved_context, pending_context = _parse_context(
+            data.get("context", {}), base_path
+        )
 
         return cls(
             name=bundle_meta.get("name", ""),
@@ -402,11 +423,12 @@ class Bundle:
             _pending_context=pending_context,
             instruction=None,  # Set separately from markdown body
             base_path=base_path,
-
         )
 
 
-def _parse_agents(agents_config: dict[str, Any], base_path: Path | None) -> dict[str, dict[str, Any]]:
+def _parse_agents(
+    agents_config: dict[str, Any], base_path: Path | None
+) -> dict[str, dict[str, Any]]:
     """Parse agents config section.
 
     Handles both include lists and direct definitions.
@@ -429,7 +451,9 @@ def _parse_agents(agents_config: dict[str, Any], base_path: Path | None) -> dict
     return result
 
 
-def _parse_context(context_config: dict[str, Any], base_path: Path | None) -> tuple[dict[str, Path], dict[str, str]]:
+def _parse_context(
+    context_config: dict[str, Any], base_path: Path | None
+) -> tuple[dict[str, Path], dict[str, str]]:
     """Parse context config section.
 
     Handles both include lists and direct path mappings.
@@ -537,11 +561,20 @@ class PreparedBundle:
 
     Contains the mount plan, module resolver, and original bundle for
     spawning support.
+
+    Attributes:
+        mount_plan: Configuration for mounting modules.
+        resolver: Resolver for finding module paths.
+        bundle: The original Bundle that was prepared.
+        bundle_package_paths: Paths to bundle src/ directories added to sys.path.
+            These need to be shared with child sessions during spawning to ensure
+            bundle packages (like amplifier_bundle_python_dev) remain importable.
     """
 
     mount_plan: dict[str, Any]
     resolver: BundleModuleResolver
     bundle: Bundle
+    bundle_package_paths: list[str] = field(default_factory=list)
 
     def _build_bundles_for_resolver(self, bundle: "Bundle") -> dict[str, "Bundle"]:
         """Build bundle registry for mention resolution.
@@ -552,7 +585,9 @@ class PreparedBundle:
         from dataclasses import replace as dataclass_replace
 
         bundles_for_resolver: dict[str, Bundle] = {}
-        namespaces = list(bundle.source_base_paths.keys()) if bundle.source_base_paths else []
+        namespaces = (
+            list(bundle.source_base_paths.keys()) if bundle.source_base_paths else []
+        )
         if bundle.name and bundle.name not in namespaces:
             namespaces.append(bundle.name)
 
@@ -561,7 +596,9 @@ class PreparedBundle:
                 continue
             ns_base_path = bundle.source_base_paths.get(ns, bundle.base_path)
             if ns_base_path:
-                bundles_for_resolver[ns] = dataclass_replace(bundle, base_path=ns_base_path)
+                bundles_for_resolver[ns] = dataclass_replace(
+                    bundle, base_path=ns_base_path
+                )
             else:
                 bundles_for_resolver[ns] = bundle
 
@@ -585,8 +622,6 @@ class PreparedBundle:
         Returns:
             Async callable that returns the system prompt string.
         """
-        from collections.abc import Awaitable, Callable
-        from dataclasses import replace as dataclass_replace
 
         from amplifier_foundation.mentions import BaseMentionResolver
         from amplifier_foundation.mentions import ContentDeduplicator
@@ -613,7 +648,9 @@ class PreparedBundle:
             combined_instruction = "\n\n---\n\n".join(instruction_parts)
 
             # Build bundle registry for resolver (using helper)
-            bundles_for_resolver = captured_self._build_bundles_for_resolver(captured_bundle)
+            bundles_for_resolver = captured_self._build_bundles_for_resolver(
+                captured_bundle
+            )
 
             resolver = BaseMentionResolver(
                 bundles=bundles_for_resolver,
@@ -693,6 +730,14 @@ class PreparedBundle:
         # Mount the resolver before initialization
         await session.coordinator.mount("module-source-resolver", self.resolver)
 
+        # Register bundle package paths for inheritance by child sessions
+        # These are src/ directories from bundles like python-dev that need to be
+        # on sys.path for their modules to import shared code
+        if self.bundle_package_paths:
+            session.coordinator.register_capability(
+                "bundle_package_paths", list(self.bundle_package_paths)
+            )
+
         # Initialize the session (loads all modules)
         await session.initialize()
 
@@ -704,7 +749,11 @@ class PreparedBundle:
         # - AGENTS.md changes to be picked up immediately
         # - Bundle instruction changes to take effect mid-session
         # - All @mentioned files to be re-read fresh each turn
-        if self.bundle.instruction or self.bundle.context or self.bundle._pending_context:
+        if (
+            self.bundle.instruction
+            or self.bundle.context
+            or self.bundle._pending_context
+        ):
             from amplifier_foundation.mentions import BaseMentionResolver
             from amplifier_foundation.mentions import ContentDeduplicator
 
@@ -718,13 +767,19 @@ class PreparedBundle:
                 base_path=self.bundle.base_path or Path.cwd(),
             )
             initial_deduplicator = ContentDeduplicator()
-            session.coordinator.register_capability("mention_resolver", initial_resolver)
-            session.coordinator.register_capability("mention_deduplicator", initial_deduplicator)
+            session.coordinator.register_capability(
+                "mention_resolver", initial_resolver
+            )
+            session.coordinator.register_capability(
+                "mention_deduplicator", initial_deduplicator
+            )
 
             # Create and register the system prompt factory
             factory = self._create_system_prompt_factory(self.bundle, session)
             context_manager = session.coordinator.get("context")
-            if context_manager and hasattr(context_manager, "set_system_prompt_factory"):
+            if context_manager and hasattr(
+                context_manager, "set_system_prompt_factory"
+            ):
                 await context_manager.set_system_prompt_factory(factory)
 
         return session
@@ -810,10 +865,14 @@ class PreparedBundle:
             child_mount_plan,
             session_id=session_id,
             parent_id=parent_session.session_id if parent_session else None,
-            approval_system=getattr(getattr(parent_session, "coordinator", None), "approval_system", None)
+            approval_system=getattr(
+                getattr(parent_session, "coordinator", None), "approval_system", None
+            )
             if parent_session
             else None,
-            display_system=getattr(getattr(parent_session, "coordinator", None), "display_system", None)
+            display_system=getattr(
+                getattr(parent_session, "coordinator", None), "display_system", None
+            )
             if parent_session
             else None,
         )
@@ -826,7 +885,9 @@ class PreparedBundle:
         # Note: For spawned sessions, we still want dynamic system prompts so that
         # any @mentioned files are fresh (though spawn sessions are typically short-lived)
         if effective_bundle.instruction or effective_bundle.context:
-            factory = self._create_system_prompt_factory(effective_bundle, child_session)
+            factory = self._create_system_prompt_factory(
+                effective_bundle, child_session
+            )
             context = child_session.coordinator.get("context")
             if context and hasattr(context, "set_system_prompt_factory"):
                 await context.set_system_prompt_factory(factory)

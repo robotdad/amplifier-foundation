@@ -51,8 +51,12 @@ class ModuleActivator:
         """
         self.cache_dir = cache_dir or get_amplifier_home() / "cache"
         self.install_deps = install_deps
-        self._resolver = SimpleSourceResolver(cache_dir=self.cache_dir, base_path=base_path)
+        self._resolver = SimpleSourceResolver(
+            cache_dir=self.cache_dir, base_path=base_path
+        )
         self._activated: set[str] = set()
+        # Track bundle package paths added to sys.path for inheritance by child sessions
+        self._bundle_package_paths: list[str] = []
 
     async def activate(self, module_name: str, source_uri: str) -> Path:
         """Activate a module by downloading and making it importable.
@@ -88,6 +92,15 @@ class ModuleActivator:
 
         self._activated.add(cache_key)
         return module_path
+
+    @property
+    def bundle_package_paths(self) -> list[str]:
+        """Get list of bundle package paths added to sys.path.
+
+        These paths need to be shared with child sessions during spawning
+        to ensure bundle packages remain importable.
+        """
+        return list(self._bundle_package_paths)
 
     async def activate_all(self, modules: list[dict]) -> dict[str, Path]:
         """Activate multiple modules.
@@ -135,11 +148,27 @@ class ModuleActivator:
 
         pyproject = bundle_path / "pyproject.toml"
         if not pyproject.exists():
-            logger.debug(f"No pyproject.toml at {bundle_path}, skipping bundle package install")
+            logger.debug(
+                f"No pyproject.toml at {bundle_path}, skipping bundle package install"
+            )
             return
 
         logger.debug(f"Installing bundle package from {bundle_path}")
         await self._install_dependencies(bundle_path)
+
+        # CRITICAL: Also add bundle's src/ directory to sys.path explicitly.
+        # Editable installs (uv pip install -e) create .pth files or importlib finders,
+        # but these mechanisms don't reliably propagate to child sessions spawned via
+        # the task tool. By explicitly adding to sys.path and tracking the path,
+        # we ensure child sessions can inherit these paths during spawning.
+        src_dir = bundle_path / "src"
+        if src_dir.exists() and src_dir.is_dir():
+            src_path_str = str(src_dir)
+            if src_path_str not in sys.path:
+                sys.path.insert(0, src_path_str)
+                logger.debug(f"Added bundle src directory to sys.path: {src_path_str}")
+            if src_path_str not in self._bundle_package_paths:
+                self._bundle_package_paths.append(src_path_str)
 
     async def _install_dependencies(self, module_path: Path) -> None:
         """Install Python dependencies for a module.
@@ -176,7 +205,9 @@ class ModuleActivator:
                     text=True,
                 )
             except subprocess.CalledProcessError as e:
-                logger.error(f"Failed to install module from {module_path}.\nstdout: {e.stdout}\nstderr: {e.stderr}")
+                logger.error(
+                    f"Failed to install module from {module_path}.\nstdout: {e.stdout}\nstderr: {e.stderr}"
+                )
                 raise
             except FileNotFoundError:
                 logger.error(
