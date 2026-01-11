@@ -56,7 +56,9 @@ class BundleState:
     included_by: list[str] | None = None  # Bundles that include this bundle
     is_root: bool = True  # True if root bundle, False if sub-bundle (behavior, etc.)
     root_name: str | None = None  # For sub-bundles, the name of the root bundle
-    explicitly_requested: bool = False  # True if user explicitly requested (bundle use/add)
+    explicitly_requested: bool = (
+        False  # True if user explicitly requested (bundle use/add)
+    )
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to JSON-serializable dict."""
@@ -86,14 +88,22 @@ class BundleState:
             uri=data["uri"],
             name=name,
             version=data.get("version"),
-            loaded_at=datetime.fromisoformat(data["loaded_at"]) if data.get("loaded_at") else None,
-            checked_at=datetime.fromisoformat(data["checked_at"]) if data.get("checked_at") else None,
+            loaded_at=datetime.fromisoformat(data["loaded_at"])
+            if data.get("loaded_at")
+            else None,
+            checked_at=datetime.fromisoformat(data["checked_at"])
+            if data.get("checked_at")
+            else None,
             local_path=data.get("local_path"),
             includes=data.get("includes"),
             included_by=data.get("included_by"),
-            is_root=data.get("is_root", True),  # Default to True for backwards compatibility
+            is_root=data.get(
+                "is_root", True
+            ),  # Default to True for backwards compatibility
             root_name=data.get("root_name"),
-            explicitly_requested=data.get("explicitly_requested", False),  # Default False for safety
+            explicitly_requested=data.get(
+                "explicitly_requested", False
+            ),  # Default False for safety
         )
 
 
@@ -376,7 +386,9 @@ class BundleRegistry:
                             name=root_bundle.name,
                             version=root_bundle.version,
                             loaded_at=datetime.now(),
-                            local_path=str(root_bundle_path.parent),  # Directory, not file
+                            local_path=str(
+                                root_bundle_path.parent
+                            ),  # Directory, not file
                             is_root=True,
                             root_name=None,
                         )
@@ -421,7 +433,9 @@ class BundleRegistry:
 
             # Update state for known bundle (pre-registered via well-known bundles, etc.)
             # Handle both: loaded by registered name OR loaded by URI but bundle.name matches registry
-            update_name = registered_name or (bundle.name if bundle.name in self._registry else None)
+            update_name = registered_name or (
+                bundle.name if bundle.name in self._registry else None
+            )
             if update_name:
                 state = self._registry[update_name]
                 state.version = bundle.version
@@ -461,7 +475,9 @@ class BundleRegistry:
                 return await self._load_markdown_bundle(bundle_md)
             if bundle_yaml.exists():
                 return await self._load_yaml_bundle(bundle_yaml)
-            raise BundleLoadError(f"Not a valid bundle: missing bundle.md or bundle.yaml in {path}")
+            raise BundleLoadError(
+                f"Not a valid bundle: missing bundle.md or bundle.yaml in {path}"
+            )
 
         if path.suffix == ".md":
             return await self._load_markdown_bundle(path)
@@ -487,7 +503,9 @@ class BundleRegistry:
 
         return Bundle.from_dict(data, base_path=path.parent)
 
-    async def _compose_includes(self, bundle: Bundle, parent_name: str | None = None) -> Bundle:
+    async def _compose_includes(
+        self, bundle: Bundle, parent_name: str | None = None
+    ) -> Bundle:
         """Load and compose included bundles.
 
         Args:
@@ -511,7 +529,17 @@ class BundleRegistry:
                     # Resolve namespace:path syntax before loading
                     resolved_source = self._resolve_include_source(include_source)
                     if resolved_source is None:
-                        logger.warning(f"Include could not be resolved (skipping): {include_source}")
+                        # Distinguish: namespace exists but path not found (error) vs namespace not registered (optional)
+                        if ":" in include_source and "://" not in include_source:
+                            namespace = include_source.split(":")[0]
+                            if self._registry.get(namespace):
+                                raise BundleDependencyError(
+                                    f"Include resolution failed: '{include_source}'. "
+                                    f"Namespace '{namespace}' is registered but the path doesn't exist."
+                                )
+                        logger.warning(
+                            f"Include skipped (unregistered namespace): {include_source}"
+                        )
                         continue
 
                     included = await self._load_single(
@@ -544,7 +572,9 @@ class BundleRegistry:
 
         return result.compose(bundle)
 
-    def _record_include_relationships(self, parent_name: str, child_names: list[str]) -> None:
+    def _record_include_relationships(
+        self, parent_name: str, child_names: list[str]
+    ) -> None:
         """Record which bundles include which other bundles.
 
         Updates both parent's 'includes' and children's 'included_by' fields.
@@ -574,7 +604,9 @@ class BundleRegistry:
 
         # Persist the updated state
         self.save()
-        logger.debug(f"Recorded include relationships: {parent_name} includes {child_names}")
+        logger.debug(
+            f"Recorded include relationships: {parent_name} includes {child_names}"
+        )
 
     async def _preload_namespace_bundles(self, includes: list) -> None:
         """Pre-load namespace bundles to ensure local_path is populated.
@@ -605,11 +637,15 @@ class BundleRegistry:
         # Load namespace bundles to populate their local_path
         for namespace in namespaces_to_load:
             try:
-                logger.debug(f"Pre-loading namespace bundle: {namespace}")
-                await self._load_single(namespace, auto_register=True, auto_include=False)
+                logger.info(f"Pre-loading namespace bundle: {namespace}")
+                await self._load_single(
+                    namespace, auto_register=True, auto_include=False
+                )
             except Exception as e:
-                logger.debug(f"Failed to pre-load namespace '{namespace}': {e}")
-                # Will fail later with proper error message during include resolution
+                raise BundleDependencyError(
+                    f"Cannot resolve includes: namespace '{namespace}' failed to load. "
+                    f"Original error: {e}"
+                ) from e
 
     def _resolve_include_source(self, source: str) -> str | None:
         """Resolve include source to a loadable URI.
@@ -647,7 +683,7 @@ class BundleRegistry:
                 # Parse the parent's git URI and append subdirectory
                 # Handle existing #subdirectory= fragments
                 base_uri = state.uri.split("#")[0]  # Remove any existing fragment
-                
+
                 # Verify the path exists locally before constructing the URI
                 if state.local_path:
                     namespace_path = Path(state.local_path)
@@ -661,13 +697,17 @@ class BundleRegistry:
                     if resolved_path:
                         # Get the relative path from the namespace root
                         if namespace_path.is_file():
-                            rel_from_root = resolved_path.relative_to(namespace_path.parent)
+                            rel_from_root = resolved_path.relative_to(
+                                namespace_path.parent
+                            )
                         else:
                             rel_from_root = resolved_path.relative_to(namespace_path)
-                        
+
                         return f"{base_uri}#subdirectory={rel_from_root}"
 
-                logger.debug(f"Namespace '{namespace}' is git-based but path '{rel_path}' not found locally")
+                logger.debug(
+                    f"Namespace '{namespace}' is git-based but path '{rel_path}' not found locally"
+                )
                 return None
 
             # Fall back to file:// for non-git sources (local bundles, etc.)
@@ -682,7 +722,9 @@ class BundleRegistry:
                 if resolved_path:
                     return f"file://{resolved_path}"
 
-                logger.debug(f"Namespace '{namespace}' found but path '{rel_path}' not found within it")
+                logger.debug(
+                    f"Namespace '{namespace}' found but path '{rel_path}' not found within it"
+                )
             else:
                 logger.debug(f"Namespace '{namespace}' has no local_path")
 
@@ -901,7 +943,9 @@ class BundleRegistry:
 
         data = {
             "version": 1,
-            "bundles": {name: state.to_dict() for name, state in self._registry.items()},
+            "bundles": {
+                name: state.to_dict() for name, state in self._registry.items()
+            },
         }
 
         with open(registry_path, "w", encoding="utf-8") as f:
@@ -922,7 +966,9 @@ class BundleRegistry:
             for name, bundle_data in data.get("bundles", {}).items():
                 self._registry[name] = BundleState.from_dict(name, bundle_data)
 
-            logger.debug(f"Loaded registry from {registry_path} ({len(self._registry)} bundles)")
+            logger.debug(
+                f"Loaded registry from {registry_path} ({len(self._registry)} bundles)"
+            )
         except Exception as e:
             logger.warning(f"Failed to load registry from {registry_path}: {e}")
 
@@ -961,4 +1007,6 @@ async def load_bundle(
         Loaded Bundle.
     """
     registry = registry or BundleRegistry()
-    return await registry._load_single(source, auto_register=True, auto_include=auto_include)
+    return await registry._load_single(
+        source, auto_register=True, auto_include=auto_include
+    )
