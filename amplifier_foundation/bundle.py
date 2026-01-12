@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from dataclasses import field
 from pathlib import Path
 from typing import Any
+from typing import Callable
 
 from amplifier_foundation.dicts.merge import deep_merge
 from amplifier_foundation.dicts.merge import merge_module_lists
@@ -199,7 +200,11 @@ class Bundle:
 
         return mount_plan
 
-    async def prepare(self, install_deps: bool = True) -> PreparedBundle:
+    async def prepare(
+        self,
+        install_deps: bool = True,
+        source_resolver: Callable[[str, str], str] | None = None,
+    ) -> PreparedBundle:
         """Prepare bundle for execution by activating all modules.
 
         Downloads and installs all modules specified in the bundle's mount plan,
@@ -211,6 +216,10 @@ class Bundle:
 
         Args:
             install_deps: Whether to install Python dependencies for modules.
+            source_resolver: Optional callback (module_id, original_source) -> resolved_source.
+                Allows app-layer source override policy to be applied before activation.
+                If provided, each module's source is passed through this resolver,
+                enabling settings-based overrides without foundation knowing about settings.
 
         Returns:
             PreparedBundle with mount_plan and create_session() helper.
@@ -225,6 +234,11 @@ class Bundle:
             session = AmplifierSession(config=prepared.mount_plan)
             await session.coordinator.mount("module-source-resolver", prepared.resolver)
             await session.initialize()
+
+            # With source overrides (app-layer policy):
+            def resolve_with_overrides(module_id: str, source: str) -> str:
+                return overrides.get(module_id) or source
+            prepared = await bundle.prepare(source_resolver=resolve_with_overrides)
         """
         from amplifier_foundation.modules.activator import ModuleActivator
 
@@ -252,22 +266,31 @@ class Bundle:
         # Collect all modules that need activation
         modules_to_activate = []
 
+        # Helper to apply source resolver if provided
+        def resolve_source(mod_spec: dict) -> dict:
+            if source_resolver and "module" in mod_spec and "source" in mod_spec:
+                resolved = source_resolver(mod_spec["module"], mod_spec["source"])
+                if resolved != mod_spec["source"]:
+                    # Copy to avoid mutating original
+                    mod_spec = {**mod_spec, "source": resolved}
+            return mod_spec
+
         # Session orchestrator and context
         session_config = mount_plan.get("session", {})
         if isinstance(session_config.get("orchestrator"), dict):
             orch = session_config["orchestrator"]
             if "source" in orch:
-                modules_to_activate.append(orch)
+                modules_to_activate.append(resolve_source(orch))
         if isinstance(session_config.get("context"), dict):
             ctx = session_config["context"]
             if "source" in ctx:
-                modules_to_activate.append(ctx)
+                modules_to_activate.append(resolve_source(ctx))
 
         # Providers, tools, hooks
         for section in ["providers", "tools", "hooks"]:
             for mod_spec in mount_plan.get(section, []):
                 if isinstance(mod_spec, dict) and "source" in mod_spec:
-                    modules_to_activate.append(mod_spec)
+                    modules_to_activate.append(resolve_source(mod_spec))
 
         # Activate all modules and get their paths
         module_paths = await activator.activate_all(modules_to_activate)
@@ -793,15 +816,17 @@ class PreparedBundle:
         parent_session: Any = None,
         session_id: str | None = None,
         orchestrator_config: dict[str, Any] | None = None,
+        parent_messages: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Spawn a sub-session with a child bundle.
 
         This is the core spawning MECHANISM. It handles:
         1. Optionally composes child with parent bundle
         2. Creates a new session with the child's mount plan
-        3. Injects system instruction if present
-        4. Executes the instruction
-        5. Returns the result
+        3. Injects parent messages if provided (for context inheritance)
+        4. Injects system instruction if present
+        5. Executes the instruction
+        6. Returns the result
 
         Agent name resolution is APP-LAYER POLICY. Apps should resolve
         agent names to Bundle objects before calling this method.
@@ -815,6 +840,9 @@ class PreparedBundle:
             session_id: Optional session ID for resuming existing session.
             orchestrator_config: Optional orchestrator config to override/merge into
                 the spawned session's orchestrator settings (e.g., min_delay_between_calls_ms).
+            parent_messages: Optional list of messages from parent session to inject
+                into child's context before execution. Enables context inheritance
+                where child can reference parent's conversation history.
 
         Returns:
             Dict with "output" (response) and "session_id".
@@ -880,6 +908,14 @@ class PreparedBundle:
         # Mount resolver and initialize
         await child_session.coordinator.mount("module-source-resolver", self.resolver)
         await child_session.initialize()
+
+        # Inject parent messages if provided (for context inheritance)
+        # This allows child sessions to have awareness of parent's conversation history.
+        # Only inject for new sessions, not when resuming (session_id provided).
+        if parent_messages and not session_id:
+            child_context = child_session.coordinator.get("context")
+            if child_context and hasattr(child_context, "set_messages"):
+                await child_context.set_messages(parent_messages)
 
         # Register system prompt factory for dynamic @mention reprocessing
         # Note: For spawned sessions, we still want dynamic system prompts so that

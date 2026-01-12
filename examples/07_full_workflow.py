@@ -218,6 +218,7 @@ def register_spawn_capability(session: Any, prepared: PreparedBundle) -> None:
         agent_configs: dict[str, dict[str, Any]],
         sub_session_id: str | None = None,
         orchestrator_config: dict[str, Any] | None = None,
+        parent_messages: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Spawn sub-session for agent.
         
@@ -229,6 +230,8 @@ def register_spawn_capability(session: Any, prepared: PreparedBundle) -> None:
             sub_session_id: Optional session ID for resuming.
             orchestrator_config: Optional orchestrator config to pass to spawned
                 session (e.g., {"min_delay_between_calls_ms": 500} for rate limiting).
+            parent_messages: Optional list of messages from parent session to inject
+                into child's context for context inheritance.
         """
         # Resolve agent name to Bundle (APP-LAYER POLICY)
         if agent_name in agent_configs:
@@ -255,6 +258,7 @@ def register_spawn_capability(session: Any, prepared: PreparedBundle) -> None:
             session_id=sub_session_id,
             parent_session=parent_session,
             orchestrator_config=orchestrator_config,
+            parent_messages=parent_messages,
         )
 
     session.coordinator.register_capability("session.spawn", spawn_capability)
