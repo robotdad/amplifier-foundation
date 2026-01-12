@@ -4,9 +4,7 @@ bundle:
   description: Bundle for developing ON the Amplifier ecosystem - multi-repo coordination, testing patterns, shadow environments
 
 includes:
-  # Base foundation capabilities (now includes python-dev)
+  # Base foundation capabilities (includes python-dev, shadow, recipes, etc.)
   - bundle: foundation
-  # Shadow environments for isolated testing
-  - bundle: git+https://github.com/microsoft/amplifier-bundle-shadow@main
   # Amplifier dev behavior (agents + context)
   - bundle: git+https://github.com/microsoft/amplifier-foundation@main#subdirectory=behaviors/amplifier-dev.yaml
