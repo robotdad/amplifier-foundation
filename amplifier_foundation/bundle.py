@@ -28,6 +28,7 @@ class Bundle:
         providers: List of provider configs.
         tools: List of tool configs.
         hooks: List of hook configs.
+        skills: List of skill sources (local paths or git URLs).
         agents: Dict mapping agent name to definition.
         context: Dict mapping context name to file path.
         instruction: System instruction from markdown body.
@@ -48,6 +49,9 @@ class Bundle:
     providers: list[dict[str, Any]] = field(default_factory=list)
     tools: list[dict[str, Any]] = field(default_factory=list)
     hooks: list[dict[str, Any]] = field(default_factory=list)
+    skills: list[str] = field(
+        default_factory=list
+    )  # Skill sources (local paths or git URLs)
 
     # Resources
     agents: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -108,6 +112,7 @@ class Bundle:
             providers=list(self.providers),
             tools=list(self.tools),
             hooks=list(self.hooks),
+            skills=list(self.skills),
             agents=dict(self.agents),
             context=initial_context,
             _pending_context=initial_pending_context,
@@ -145,6 +150,11 @@ class Bundle:
             result.providers = merge_module_lists(result.providers, other.providers)
             result.tools = merge_module_lists(result.tools, other.tools)
             result.hooks = merge_module_lists(result.hooks, other.hooks)
+
+            # Skills: accumulate unique sources (preserving order, later additions at end)
+            for skill_source in other.skills:
+                if skill_source not in result.skills:
+                    result.skills.append(skill_source)
 
             # Agents: later overrides
             result.agents.update(other.agents)
@@ -196,6 +206,10 @@ class Bundle:
         # Agents go in mount plan for sub-session delegation
         if self.agents:
             mount_plan["agents"] = dict(self.agents)
+
+        # Skills sources (local paths or git URLs) for skill discovery
+        if self.skills:
+            mount_plan["skills"] = list(self.skills)
 
         return mount_plan
 
@@ -409,6 +423,13 @@ class Bundle:
             data.get("context", {}), base_path
         )
 
+        # Parse skills - can be a list or dict with sources key
+        skills_config = data.get("skills", [])
+        if isinstance(skills_config, dict):
+            skills = skills_config.get("sources", [])
+        else:
+            skills = skills_config if isinstance(skills_config, list) else []
+
         return cls(
             name=bundle_meta.get("name", ""),
             version=bundle_meta.get("version", "1.0.0"),
@@ -418,6 +439,7 @@ class Bundle:
             providers=data.get("providers", []),
             tools=data.get("tools", []),
             hooks=data.get("hooks", []),
+            skills=skills,
             agents=_parse_agents(data.get("agents", {}), base_path),
             context=resolved_context,
             _pending_context=pending_context,
