@@ -224,6 +224,17 @@ Every @mention adds tokens to context. Before adding one:
 @docs/README.md
 ```
 
+### Using @Mentions in Tool Calls
+
+Tools that accept file paths (like `read_file`, `write_file`, `edit_file`, `recipes`) support `@bundle:path` format. **Prefer @mentions over absolute paths** when referencing files within bundles.
+
+**Why @mentions are preferred for bundle resources:**
+- Portable across environments (no machine-specific paths)
+- Self-documenting (shows which bundle owns the file)
+- Shorter and more readable
+
+When you need to reference a file that belongs to a bundle, use the `@bundle:path` format rather than discovering and using its installed location on disk. See individual tool descriptions for specific examples.
+
 ## ⚠️ CRITICAL: Your Responsibility to Keep This File Current
 
 **YOU ARE READING THIS FILE RIGHT NOW. IF YOU MAKE CHANGES TO THE SYSTEM, YOU MUST UPDATE THIS FILE.**
