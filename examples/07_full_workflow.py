@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Example 4: Complete workflow - load, compose, prepare, execute.
+"""Example 7: Complete workflow - load, compose, prepare, execute.
 
 TEACHABLE MOMENT: The full prepare() → create_session() → execute() flow
 
@@ -14,6 +14,9 @@ OPTIONAL ADVANCED features (marked clearly):
 
 Requirements:
 - ANTHROPIC_API_KEY or OPENAI_API_KEY environment variable set
+
+Bundle Source:
+- Loads foundation from GitHub (production pattern)
 """
 
 from __future__ import annotations
@@ -26,6 +29,9 @@ from typing import Any
 from amplifier_foundation import Bundle
 from amplifier_foundation import load_bundle
 from amplifier_foundation.bundle import PreparedBundle
+
+# Foundation bundle source (production pattern - loads from GitHub)
+FOUNDATION_SOURCE = "git+https://github.com/microsoft/amplifier-foundation@main"
 
 # =============================================================================
 # SECTION 1: FOUNDATION MECHANISM (The essential pattern - copy this)
@@ -102,7 +108,9 @@ def discover_providers(bundle: Bundle) -> list[dict[str, Any]]:
         providers.append(
             {
                 "name": bundle_info.get("name", provider_file.stem),
-                "model": provider_config.get("config", {}).get("default_model", "unknown"),
+                "model": provider_config.get("config", {}).get(
+                    "default_model", "unknown"
+                ),
                 "file": provider_file,
                 "env_var": env_var,
                 "env_set": bool(os.environ.get(env_var)),
@@ -112,7 +120,9 @@ def discover_providers(bundle: Bundle) -> list[dict[str, Any]]:
     return providers
 
 
-def select_provider_interactive(providers: list[dict[str, Any]]) -> dict[str, Any] | None:
+def select_provider_interactive(
+    providers: list[dict[str, Any]],
+) -> dict[str, Any] | None:
     """Interactive provider selection."""
     print("\nAvailable providers:")
     for i, p in enumerate(providers, 1):
@@ -221,7 +231,7 @@ def register_spawn_capability(session: Any, prepared: PreparedBundle) -> None:
         parent_messages: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         """Spawn sub-session for agent.
-        
+
         Args:
             agent_name: Name of the agent to spawn.
             instruction: Task instruction for the agent.
@@ -249,7 +259,8 @@ def register_spawn_capability(session: Any, prepared: PreparedBundle) -> None:
             providers=config.get("providers", []),
             tools=config.get("tools", []),
             hooks=config.get("hooks", []),
-            instruction=config.get("instruction") or config.get("system", {}).get("instruction"),
+            instruction=config.get("instruction")
+            or config.get("system", {}).get("instruction"),
         )
 
         return await prepared.spawn(
@@ -276,9 +287,8 @@ async def main() -> None:
     print("=" * 60)
 
     # Step 1: Load foundation
-    foundation_path = Path(__file__).parent.parent.parent
-    print(f"\n[1/4] Loading foundation from: {foundation_path}")
-    foundation = await load_bundle(str(foundation_path))
+    print(f"\n[1/4] Loading foundation from: {FOUNDATION_SOURCE}")
+    foundation = await load_bundle(FOUNDATION_SOURCE)
     print(f"      Loaded: {foundation.name} v{foundation.version}")
 
     # Step 2: Discover and select provider
