@@ -150,7 +150,7 @@ sources:
     type: local
     path: /path/to/amplifier-module-new
 EOF
-amplifier interactive
+amplifier  # Start interactive session (no subcommand = interactive mode)
 # Verify module loads and works
 
 # 3. Push and verify CI
@@ -181,15 +181,15 @@ git push origin feat/contract-change
 ### Testing Bundle Composition
 
 ```bash
-# 1. Validate YAML
-amplifier bundle validate path/to/bundle.md
+# 1. Test bundle loads directly (file paths work with `amplifier run --bundle`)
+amplifier run --bundle ./path/to/bundle.md "test prompt"
 
-# 2. Load and check
-amplifier bundle use path/to/bundle.md
-amplifier interactive
-# Verify agents available, context loaded
+# 2. Register and set as active (for repeated use)
+amplifier bundle add ./path/to/bundle.md --name my-bundle
+amplifier bundle use my-bundle
+amplifier  # Start interactive session with the active bundle
 
-# 3. Test specific agents
+# 3. Test specific agents (in interactive session)
 > List available agents
 > Use the new-agent to do X
 ```
